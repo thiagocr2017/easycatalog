@@ -7,6 +7,7 @@ class Product {
   final int? sectionId;
   final bool isDepleted;
   final String createdAt;
+  final String? depletedAt; // ✅ nueva propiedad opcional
 
   Product({
     this.id,
@@ -17,6 +18,7 @@ class Product {
     this.sectionId,
     this.isDepleted = false,
     String? createdAt,
+    this.depletedAt,
   }) : createdAt = createdAt ?? DateTime.now().toIso8601String();
 
   Map<String, dynamic> toMap() => {
@@ -28,6 +30,7 @@ class Product {
     'sectionId': sectionId,
     'isDepleted': isDepleted ? 1 : 0,
     'createdAt': createdAt,
+    'depletedAt': depletedAt,
   };
 
   factory Product.fromMap(Map<String, dynamic> map) {
@@ -40,6 +43,7 @@ class Product {
       sectionId: map['sectionId'] as int?,
       isDepleted: (map['isDepleted'] ?? 0) == 1,
       createdAt: map['createdAt'] as String? ?? DateTime.now().toIso8601String(),
+      depletedAt: map['depletedAt'] as String?,
     );
   }
 }

@@ -85,7 +85,8 @@ class PdfService {
     for (final section in sections) {
       final products = allProducts
           .where((p) => p.sectionId == section.id && !p.isDepleted)
-          .toList();
+          .toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
       if (products.isEmpty) continue; // omitir secciones vacías
 
