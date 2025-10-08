@@ -91,6 +91,16 @@ class DatabaseHelper {
     return await db.query(tableSections);
   }
 
+  Future<int> updateSection(Map<String, dynamic> row) async {
+    final db = await database;
+    return await db.update(
+      tableSections,
+      row,
+      where: 'id = ?',
+      whereArgs: [row['id']],
+    );
+  }
+
   Future<int> deleteSection(int id) async {
     final db = await database;
     return await db.delete(tableSections, where: 'id = ?', whereArgs: [id]);
