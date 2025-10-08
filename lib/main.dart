@@ -8,6 +8,8 @@ import 'pages/admin/folder_view_page.dart';
 import 'pages/catalog/catalog_style_page.dart';
 import 'pages/catalog/seller_settings_page.dart';
 import 'pages/catalog/pdf_preview_page.dart';
+import 'pages/admin/depleted_products_page.dart';
+
 
 void main() {
   runApp(const EasyCatalogApp());
@@ -51,6 +53,7 @@ class EasyCatalogApp extends StatelessWidget {
         '/catalog/style': (context) => const CatalogStylePage(),
         '/catalog/seller_settings': (context) => const SellerSettingsPage(),
         '/catalog/pdf_preview': (context) => const PdfPreviewPage(),
+        '/admin/depleted': (context) => const DepletedProductsPage(),
       },
     );
   }

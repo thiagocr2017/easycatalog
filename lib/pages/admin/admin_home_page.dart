@@ -46,6 +46,13 @@ class AdminHomePage extends StatelessWidget {
             subtitle: const Text('Generar y compartir PDF'),
             onTap: () => Navigator.pushNamed(context, '/catalog/pdf_preview'),
           ),
+          ListTile(
+            leading: const Icon(Icons.remove_shopping_cart_outlined),
+            title: const Text('Productos agotados'),
+            subtitle: const Text('Ver y exportar lista PDF'),
+            onTap: () => Navigator.pushNamed(context, '/admin/depleted'),
+          ),
+
         ],
       ),
     );

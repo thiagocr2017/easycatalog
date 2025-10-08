@@ -164,6 +164,23 @@ class _ProductsPageState extends State<ProductsPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
+                  icon: Icon(
+                    p.isDepleted ? Icons.visibility_off : Icons.visibility,
+                    color: p.isDepleted ? Colors.red : Colors.green,
+                  ),
+                  tooltip: p.isDepleted ? 'Marcar como disponible' : 'Marcar como agotado',
+                  onPressed: () async {
+                    final updated = p.toMap();
+                    updated['isDepleted'] = p.isDepleted ? 0 : 1;
+                    updated['depletedAt'] = p.isDepleted
+                        ? null
+                        : DateTime.now().toIso8601String();
+                    await _db.updateProduct(updated);
+                    if (!mounted) return;
+                    _loadData();
+                  },
+                ),
+                IconButton(
                   icon: const Icon(Icons.edit),
                   onPressed: () => _addOrEditProduct(product: p),
                 ),
@@ -173,6 +190,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 ),
               ],
             ),
+
           );
         },
       ),

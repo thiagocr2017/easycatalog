@@ -45,6 +45,7 @@ class DatabaseHelper {
         imagePath TEXT,
         sectionId INTEGER,
         isDepleted INTEGER DEFAULT 0
+        depletedAt TEXT
       )
     ''');
 

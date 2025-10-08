@@ -344,4 +344,83 @@ class PdfService {
       ),
     );
   }
+  // ─────────────────────────────────────────────
+  // Generar el PDF de productos agotados
+  // ─────────────────────────────────────────────
+  Future<Uint8List> buildDepletedProductsReport(List<Product> products) async {
+    final doc = pw.Document();
+    final montserrat =
+    pw.Font.ttf(await rootBundle.load('assets/fonts/Montserrat-Regular.ttf'));
+    final openSans =
+    pw.Font.ttf(await rootBundle.load('assets/fonts/OpenSans-Regular.ttf'));
+
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Reporte de Productos Agotados',
+                  style: pw.TextStyle(
+                      font: montserrat, fontSize: 22, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 20),
+              ...products.map((p) {
+                final date = DateTime.tryParse(p.depletedAt ?? '');
+                final formatted = date != null
+                    ? '${date.day}/${date.month}/${date.year}'
+                    : '';
+                pw.ImageProvider? img;
+                if (p.imagePath != null && File(p.imagePath!).existsSync()) {
+                  img = pw.MemoryImage(File(p.imagePath!).readAsBytesSync());
+                }
+                return pw.Container(
+                  margin: const pw.EdgeInsets.only(bottom: 16),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Container(
+                        width: 80,
+                        height: 80,
+                        color: PdfColors.grey300,
+                        child: img != null
+                            ? pw.Image(img, fit: pw.BoxFit.cover)
+                            : pw.Center(child: pw.Text('Sin imagen')),
+                      ),
+                      pw.SizedBox(width: 12),
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text(p.name,
+                                style: pw.TextStyle(
+                                    font: montserrat,
+                                    fontSize: 16,
+                                    fontWeight: pw.FontWeight.bold)),
+                            pw.Text(p.description,
+                                style: pw.TextStyle(
+                                    font: openSans,
+                                    fontSize: 12,
+                                    color: PdfColors.grey800)),
+                            pw.Text('Precio: \$${p.price.toStringAsFixed(2)}',
+                                style: pw.TextStyle(
+                                    font: openSans, fontSize: 12)),
+                            pw.Text('Agotado: $formatted',
+                                style: pw.TextStyle(
+                                    font: openSans, fontSize: 11,
+                                    color: PdfColors.red)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          );
+        },
+      ),
+    );
+    return doc.save();
+  }
 }
