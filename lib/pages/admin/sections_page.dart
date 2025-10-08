@@ -34,11 +34,6 @@ class _SectionsPageState extends State<SectionsPage> {
     _loadSections();
   }
 
-  Future<void> _deleteSection(int id) async {
-    await _db.deleteSection(id);
-    _loadSections();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,11 +60,23 @@ class _SectionsPageState extends State<SectionsPage> {
                   final section = _sections[i];
                   return ListTile(
                     title: Text(section.name),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => _deleteSection(section.id!),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          tooltip: 'Editar nombre',
+                          onPressed: () => _editSection(section),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Eliminar sección',
+                          onPressed: () => _confirmDeleteSection(section),
+                        ),
+                      ],
                     ),
                   );
+
                 },
               ),
             ),
@@ -78,4 +85,59 @@ class _SectionsPageState extends State<SectionsPage> {
       ),
     );
   }
+
+  Future<void> _confirmDeleteSection(Section section) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar sección'),
+        content: Text('¿Deseas eliminar la sección "${section.name}"? '
+            'Esto no eliminará sus productos, pero los dejará sin categoría.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _db.deleteSection(section.id!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Sección "${section.name}" eliminada')));
+      _loadSections();
+    }
+  }
+
+  Future<void> _editSection(Section section) async {
+    final controller = TextEditingController(text: section.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar sección'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Nuevo nombre'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != section.name) {
+      await _db.deleteSection(section.id!);
+      await _db.insertSection({'name': newName});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Sección actualizada a "$newName"')));
+      _loadSections();
+    }
+  }
+
+
 }

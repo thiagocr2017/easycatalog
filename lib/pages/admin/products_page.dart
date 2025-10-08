@@ -136,11 +136,28 @@ class _ProductsPageState extends State<ProductsPage> {
     );
   }
 
-  Future<void> _deleteProduct(int id) async {
-    await _db.deleteProduct(id);
-    if (!mounted) return;
-    _loadData();
+  Future<void> _deleteProduct(int id, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar producto'),
+        content: Text('¿Estás seguro de eliminar "$name"? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _db.deleteProduct(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Producto "$name" eliminado')));
+      _loadData();
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +203,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _deleteProduct(p.id!),
+                  onPressed: () => _deleteProduct(p.id!, p.name),
                 ),
               ],
             ),

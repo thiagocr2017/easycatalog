@@ -27,7 +27,7 @@ class _SellerSettingsPageState extends State<SellerSettingsPage> {
     final msg = await _db.getSetting('seller.message');
     if (!mounted) return;
     setState(() {
-      _nameCtrl.text = name ?? 'Thiago Hernández';
+      _nameCtrl.text = name ?? 'Thiago Lopez';
       _phoneCtrl.text = phone ?? '+52 55 1234 5678';
       _msgCtrl.text = msg ?? 'Hola Thiago, me gustaría hacer un pedido.';
       _loading = false;

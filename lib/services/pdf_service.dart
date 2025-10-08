@@ -131,7 +131,7 @@ class PdfService {
                 if (s.logoPath != null && File(s.logoPath!).existsSync())
                   pw.Image(
                     pw.MemoryImage(File(s.logoPath!).readAsBytesSync()),
-                    height: 100,
+                    height: 180,
                   )
                 else
                   pw.Column(
