@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+//import 'package:path_provider/path_provider.dart';
 import '../../data/database_helper.dart';
 import '../../models/product.dart';
 import '../../services/pdf_service.dart';
+import '../catalog/pdf_preview_page.dart'; // para reutilizar vista PDF
 
 class DepletedProductsPage extends StatefulWidget {
   const DepletedProductsPage({super.key});
@@ -13,7 +15,7 @@ class DepletedProductsPage extends StatefulWidget {
 
 class _DepletedProductsPageState extends State<DepletedProductsPage> {
   final _db = DatabaseHelper.instance;
-  final _pdf = PdfService();
+  final _pdfService = PdfService();
   List<Product> _depleted = [];
 
   @override
@@ -32,18 +34,35 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
         ..sort((a, b) {
           final da = DateTime.tryParse(a.depletedAt ?? '') ?? DateTime(2000);
           final db = DateTime.tryParse(b.depletedAt ?? '') ?? DateTime(2000);
-          return db.compareTo(da); // más recientes primero
+          return db.compareTo(da);
         });
     });
   }
 
-  Future<void> _exportPdf() async {
-    final pdfBytes = await _pdf.buildDepletedProductsReport(_depleted);
-    final file = File('${Directory.systemTemp.path}/productos_agotados.pdf');
-    await file.writeAsBytes(pdfBytes);
+  Future<void> _reactivateProduct(Product p) async {
+    final updated = p.toMap();
+    updated['isDepleted'] = 0;
+    updated['depletedAt'] = null;
+    await _db.updateProduct(updated);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('PDF generado en ${file.path}')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Producto "${p.name}" reactivado')),
+    );
+    _loadDepleted();
+  }
+
+  void _previewPdf() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PdfPreviewPage(
+          customBuilder: (format) async =>
+          await _pdfService.buildDepletedProductsReport(_depleted),
+          title: 'Vista previa de productos agotados',
+          fileName: 'productos_agotados.pdf',
+        ),
+      ),
+    );
   }
 
   @override
@@ -54,8 +73,9 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined),
-            onPressed: _exportPdf,
-          )
+            tooltip: 'Vista previa PDF',
+            onPressed: _previewPdf,
+          ),
         ],
       ),
       body: _depleted.isEmpty
@@ -68,13 +88,24 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
           final formatted = date != null
               ? '${date.day}/${date.month}/${date.year}'
               : '';
-          return ListTile(
-            leading: p.imagePath != null && File(p.imagePath!).existsSync()
-                ? Image.file(File(p.imagePath!), width: 50, height: 50, fit: BoxFit.cover)
-                : const Icon(Icons.image_not_supported),
-            title: Text(p.name),
-            subtitle: Text(
-                '${p.description}\nPrecio: \$${p.price.toStringAsFixed(2)}\nAgotado: $formatted'),
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: ListTile(
+              leading: p.imagePath != null &&
+                  File(p.imagePath!).existsSync()
+                  ? Image.file(File(p.imagePath!),
+                  width: 50, height: 50, fit: BoxFit.cover)
+                  : const Icon(Icons.image_not_supported),
+              title: Text(p.name),
+              subtitle: Text(
+                '${p.description}\nPrecio: \$${p.price.toStringAsFixed(2)}\nAgotado: $formatted',
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.restore_outlined, color: Colors.green),
+                tooltip: 'Reactivar producto',
+                onPressed: () => _reactivateProduct(p),
+              ),
+            ),
           );
         },
       ),
