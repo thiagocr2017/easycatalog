@@ -13,11 +13,12 @@ class StyleSettings {
     this.logoPath,
   });
 
+  // 🎨 Colores por defecto actualizados
   factory StyleSettings.defaults() => const StyleSettings(
-    backgroundColor: 0xFFF4F7F8,
-    highlightColor: 0xFF3A8FB7,
-    infoBoxColor: 0xFFE6E1C5,
-    textColor: 0xFF222222,
+    backgroundColor: 0xFFE1F6B4, // Fondo: #FFE1F6B4
+    highlightColor: 0xFF50B203,  // Destacado: #FF50B203
+    infoBoxColor: 0xFFEEE9CC,    // Caja de información: #FFEEE9CC
+    textColor: 0xFF222222,       // Texto: #FF222222
   );
 
   Map<String, Object?> toMap() => {
