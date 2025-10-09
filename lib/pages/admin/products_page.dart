@@ -17,6 +17,8 @@ class _ProductsPageState extends State<ProductsPage> {
   final _db = DatabaseHelper.instance;
   List<Product> _products = [];
   List<Section> _sections = [];
+  Map<int, String> _sectionNames = {};
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -27,10 +29,19 @@ class _ProductsPageState extends State<ProductsPage> {
   Future<void> _loadData() async {
     final sectionData = await _db.getSections();
     final productData = await _db.getProducts();
+
+    final sections = sectionData.map((e) => Section.fromMap(e)).toList();
+    final products = productData.map((e) => Product.fromMap(e)).toList();
+
+    final sectionNames = {
+      for (final s in sections) if (s.id != null) s.id!: s.name
+    };
+
     if (!mounted) return;
     setState(() {
-      _sections = sectionData.map((e) => Section.fromMap(e)).toList();
-      _products = productData.map((e) => Product.fromMap(e)).toList();
+      _sections = sections;
+      _products = products;
+      _sectionNames = sectionNames;
     });
   }
 
@@ -94,10 +105,7 @@ class _ProductsPageState extends State<ProductsPage> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
           ElevatedButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -124,9 +132,10 @@ class _ProductsPageState extends State<ProductsPage> {
 
               if (!context.mounted) return;
               Navigator.pop(context);
-              messenger.showSnackBar(
-                SnackBar(content: Text(product == null ? 'Producto agregado' : 'Producto actualizado')),
-              );
+              messenger.showSnackBar(SnackBar(
+                  content: Text(product == null
+                      ? 'Producto agregado'
+                      : 'Producto actualizado')));
               _loadData();
             },
             child: const Text('Guardar'),
@@ -158,58 +167,137 @@ class _ProductsPageState extends State<ProductsPage> {
     }
   }
 
+  Future<void> _toggleDepleted(Product p) async {
+    final updated = p.toMap();
+    updated['isDepleted'] = p.isDepleted ? 0 : 1;
+    updated['depletedAt'] =
+    p.isDepleted ? null : DateTime.now().toIso8601String();
+    await _db.updateProduct(updated);
+    if (!mounted) return;
+    _loadData();
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Filtrar productos según búsqueda
+    final filteredProducts = _products.where((p) {
+      final sectionName =
+          _sectionNames[p.sectionId ?? -1]?.toLowerCase() ?? 'sin sección';
+      return p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          sectionName.contains(_searchQuery.toLowerCase());
+    }).toList();
+
+    // Agrupar productos filtrados por sección
+    final grouped = <String, List<Product>>{};
+    for (final p in filteredProducts) {
+      final name = _sectionNames[p.sectionId ?? -1] ?? 'Sin sección';
+      grouped.putIfAbsent(name, () => []).add(p);
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Productos')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addOrEditProduct(),
-        child: const Icon(Icons.add),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 16, right: 16), // ✅ separación extra
+        child: FloatingActionButton(
+          onPressed: () => _addOrEditProduct(),
+          child: const Icon(Icons.add),
+        ),
       ),
-      body: ListView.builder(
-        itemCount: _products.length,
-        itemBuilder: (context, i) {
-          final p = _products[i];
-          return ListTile(
-            leading: p.imagePath != null && File(p.imagePath!).existsSync()
-                ? Image.file(File(p.imagePath!), width: 50, height: 50, fit: BoxFit.cover)
-                : const Icon(Icons.image_not_supported),
-            title: Text(p.name),
-            subtitle: Text('Precio: \$${p.price.toStringAsFixed(2)}'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(
-                    p.isDepleted ? Icons.visibility_off : Icons.visibility,
-                    color: p.isDepleted ? Colors.red : Colors.green,
+      body: Padding(
+        padding: const EdgeInsets.only(bottom: 70), // ✅ evita que el FAB tape los productos
+        child: Column(
+          children: [
+            // 🔍 Barra de búsqueda
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: TextField(
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'Buscar producto o sección...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  tooltip: p.isDepleted ? 'Marcar como disponible' : 'Marcar como agotado',
-                  onPressed: () async {
-                    final updated = p.toMap();
-                    updated['isDepleted'] = p.isDepleted ? 0 : 1;
-                    updated['depletedAt'] = p.isDepleted
-                        ? null
-                        : DateTime.now().toIso8601String();
-                    await _db.updateProduct(updated);
-                    if (!mounted) return;
-                    _loadData();
-                  },
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () => _addOrEditProduct(product: p),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _deleteProduct(p.id!, p.name),
-                ),
-              ],
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
             ),
-
-          );
-        },
+            Expanded(
+              child: grouped.isEmpty
+                  ? const Center(child: Text('No hay productos registrados'))
+                  : ListView(
+                children: grouped.entries.map((entry) {
+                  final sectionName = entry.key;
+                  final products = entry.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        color: Colors.blueGrey.shade50,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Text(
+                          sectionName,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueGrey,
+                          ),
+                        ),
+                      ),
+                      ...products.map((p) => Card(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        child: ListTile(
+                          leading: p.imagePath != null &&
+                              File(p.imagePath!).existsSync()
+                              ? Image.file(File(p.imagePath!),
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover)
+                              : const Icon(Icons.image_not_supported),
+                          title: Text(p.name),
+                          subtitle: Text(
+                              'Precio: \$${p.price.toStringAsFixed(2)}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  p.isDepleted
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: p.isDepleted
+                                      ? Colors.red
+                                      : Colors.green,
+                                ),
+                                tooltip: p.isDepleted
+                                    ? 'Marcar como disponible'
+                                    : 'Marcar como agotado',
+                                onPressed: () => _toggleDepleted(p),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.edit),
+                                onPressed: () =>
+                                    _addOrEditProduct(product: p),
+                              ),
+                              IconButton(
+                                icon:
+                                const Icon(Icons.delete_outline),
+                                onPressed: () =>
+                                    _deleteProduct(p.id!, p.name),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
