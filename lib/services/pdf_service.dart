@@ -9,6 +9,8 @@ import '../models/product.dart';
 import '../models/section.dart';
 import '../models/style_settings.dart';
 import '../models/seller_settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 class PdfService {
   final _db = DatabaseHelper.instance;
@@ -34,7 +36,7 @@ class PdfService {
   // ─────────────────────────────────────────────
   // Cargar información del vendedor
   // ─────────────────────────────────────────────
-  Future<SellerSettings> _loadSellerSettings() async {
+ /* Future<SellerSettings> _loadSellerSettings() async {
     final name = await _db.getSetting('seller.name');
     final phone = await _db.getSetting('seller.phone');
     final msg = await _db.getSetting('seller.message');
@@ -43,7 +45,24 @@ class PdfService {
       phone: phone ?? '+52 55 1234 5678',
       message: msg ?? 'Hola Thiago, me gustaría hacer un pedido.',
     );
+  }*/
+
+  // ─────────────────────────────────────────────
+  // Cargar información del vendedor activo
+  // ─────────────────────────────────────────────
+  Future<SellerSettings> _loadSellerSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final activeId = prefs.getInt('activeSellerId') ?? 1;
+
+    final data = await _db.getSellerSettings(activeId);
+
+    return SellerSettings(
+      name: data['name'] ?? 'Thiago Hernández',
+      phone: data['phone'] ?? '+52 55 1234 5678',
+      message: data['message'] ?? 'Hola Thiago, me gustaría hacer un pedido.',
+    );
   }
+
 
   // ─────────────────────────────────────────────
   // Conversión de color

@@ -79,6 +79,49 @@ class DatabaseHelper {
   }
 
   // ───────────────────────────────
+// Vendedores (múltiples)
+// ───────────────────────────────
+  Future<void> setSellerSetting(int sellerId, String key, String value) async {
+    final db = await database;
+    await db.insert(
+      tableSettings,
+      {'key': 'seller.$sellerId.$key', 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Map<String, String>> getSellerSettings(int sellerId) async {
+    final db = await database;
+    final res = await db.query(
+      tableSettings,
+      where: 'key LIKE ?',
+      whereArgs: ['seller.$sellerId.%'],
+    );
+    final map = <String, String>{};
+    for (final row in res) {
+      final key = (row['key'] as String).split('.').last;
+      map[key] = row['value'] as String;
+    }
+    return map;
+  }
+
+  Future<List<int>> getAllSellerIds() async {
+    final db = await database;
+    final res = await db.query(
+      tableSettings,
+      columns: ['key'],
+      where: 'key LIKE ?',
+      whereArgs: ['seller.%.name'],
+    );
+    final ids = <int>{};
+    for (final r in res) {
+      final parts = (r['key'] as String).split('.');
+      if (parts.length >= 3) ids.add(int.tryParse(parts[1]) ?? 0);
+    }
+    return ids.toList()..sort();
+  }
+
+  // ───────────────────────────────
   // Secciones
   // ───────────────────────────────
   Future<int> insertSection(Map<String, dynamic> row) async {
