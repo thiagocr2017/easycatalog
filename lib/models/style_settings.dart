@@ -30,9 +30,9 @@ class StyleSettings {
   };
 
   factory StyleSettings.fromMap(Map<String, Object?> map) => StyleSettings(
-    backgroundColor: (map['backgroundColor'] as int?) ?? 0xFFF4F7F8,
-    highlightColor: (map['highlightColor'] as int?) ?? 0xFF3A8FB7,
-    infoBoxColor: (map['infoBoxColor'] as int?) ?? 0xFFE6E1C5,
+    backgroundColor: (map['backgroundColor'] as int?) ?? 0xFFE1F6B4,
+    highlightColor: (map['highlightColor'] as int?) ?? 0xFF50B203,
+    infoBoxColor: (map['infoBoxColor'] as int?) ?? 0xFFEEE9CC,
     textColor: (map['textColor'] as int?) ?? 0xFF222222,
     logoPath: map['logoPath'] as String?,
   );
