@@ -23,6 +23,8 @@ class EasyCatalogApp extends StatelessWidget {
     return MaterialApp(
       title: 'EasyCatalog',
       debugShowCheckedModeBanner: false,
+
+      // 🎨 Tema claro
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3A8FB7)),
         useMaterial3: true,
@@ -41,6 +43,35 @@ class EasyCatalogApp extends StatelessWidget {
           foregroundColor: Colors.white,
         ),
       ),
+
+      // 🌙 Tema oscuro
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF3A8FB7),
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          backgroundColor: Color(0xFF1E1E1E),
+          foregroundColor: Colors.white,
+          titleTextStyle: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+            color: Colors.white,
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF3A8FB7),
+          foregroundColor: Colors.white,
+        ),
+        cardColor: const Color(0xFF2A2A2A),
+        scaffoldBackgroundColor: const Color(0xFF121212),
+      ),
+
+      // 🔄 Seguir el modo del sistema
+      themeMode: ThemeMode.system,
 
       // Página inicial
       home: const AdminHomePage(),
