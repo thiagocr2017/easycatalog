@@ -81,6 +81,12 @@ class _ProductsPageState extends State<ProductsPage> {
               ),
               const SizedBox(height: 10),
               ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                  imagePath != null ? Colors.green.shade100 : Theme.of(context).primaryColor,
+                  foregroundColor:
+                  imagePath != null ? Colors.green.shade800 : Colors.white,
+                ),
                 onPressed: () async {
                   final picker = ImagePicker();
                   final xfile = await picker.pickImage(source: ImageSource.gallery);
@@ -96,11 +102,17 @@ class _ProductsPageState extends State<ProductsPage> {
                   imagePath = newFile.path;
 
                   if (!context.mounted) return;
-                  setState(() {});
+                  // 🔄 Rebuild del diálogo para actualizar el botón
+                  (context as Element).markNeedsBuild();
                 },
-                icon: const Icon(Icons.image),
-                label: const Text('Seleccionar imagen'),
+                icon: Icon(
+                  imagePath != null ? Icons.check_circle_outline : Icons.image_outlined,
+                ),
+                label: Text(
+                  imagePath != null ? 'Imagen seleccionada' : 'Seleccionar imagen',
+                ),
               ),
+
             ],
           ),
         ),
