@@ -10,18 +10,14 @@ class AdminHomePage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+
           ListTile(
-            leading: const Icon(Icons.color_lens_outlined),
-            title: const Text('Estilo del Catálogo'),
-            subtitle: const Text('Colores, fuentes y logo'),
-            onTap: () => Navigator.pushNamed(context, '/catalog/style'),
+            leading: const Icon(Icons.picture_as_pdf_outlined),
+            title: const Text('Vista previa del catálogo'),
+            subtitle: const Text('Generar y compartir PDF'),
+            onTap: () => Navigator.pushNamed(context, '/catalog/pdf_preview'),
           ),
-          ListTile(
-            leading: const Icon(Icons.store_outlined),
-            title: const Text('Configuración del Vendedor'),
-            subtitle: const Text('Nombre, teléfono y mensaje de WhatsApp'),
-            onTap: () => Navigator.pushNamed(context, '/catalog/seller_settings'),
-          ),
+
           ListTile(
             leading: const Icon(Icons.inventory_2_outlined),
             title: const Text('Productos'),
@@ -40,12 +36,7 @@ class AdminHomePage extends StatelessWidget {
             subtitle: const Text('Abrir directorio interno con imágenes'),
             onTap: () => Navigator.pushNamed(context, '/admin/folder_view'),
           ),
-          ListTile(
-            leading: const Icon(Icons.picture_as_pdf_outlined),
-            title: const Text('Vista previa del catálogo'),
-            subtitle: const Text('Generar y compartir PDF'),
-            onTap: () => Navigator.pushNamed(context, '/catalog/pdf_preview'),
-          ),
+
           ListTile(
             leading: const Icon(Icons.remove_shopping_cart_outlined),
             title: const Text('Productos agotados'),
@@ -53,6 +44,19 @@ class AdminHomePage extends StatelessWidget {
             onTap: () => Navigator.pushNamed(context, '/admin/depleted'),
           ),
 
+          ListTile(
+            leading: const Icon(Icons.color_lens_outlined),
+            title: const Text('Estilo del Catálogo'),
+            subtitle: const Text('Colores, fuentes y logo'),
+            onTap: () => Navigator.pushNamed(context, '/catalog/style'),
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: const Text('Configuración del Vendedor'),
+            subtitle: const Text('Nombre, teléfono y mensaje de WhatsApp'),
+            onTap: () => Navigator.pushNamed(context, '/catalog/seller_settings'),
+          ),
         ],
       ),
     );
