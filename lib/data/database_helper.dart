@@ -57,6 +57,18 @@ class DatabaseHelper {
     ''');
   }
 
+  Future<void> ensureSectionOrderColumn() async {
+    final db = await database;
+    final res = await db.rawQuery(
+        "PRAGMA table_info($tableSections)");
+    final hasSortOrder = res.any((col) => col['name'] == 'sortOrder');
+    if (!hasSortOrder) {
+      await db.execute(
+          'ALTER TABLE $tableSections ADD COLUMN sortOrder INTEGER DEFAULT 0');
+    }
+  }
+
+
   // ───────────────────────────────
   // Métodos para Settings
   // ───────────────────────────────

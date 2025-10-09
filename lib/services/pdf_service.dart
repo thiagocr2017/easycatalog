@@ -92,7 +92,9 @@ class PdfService {
     pw.Font.ttf(await rootBundle.load('assets/fonts/BukhariScript.ttf'));
 
     final sections =
-    (await _db.getSections()).map((m) => Section.fromMap(m)).toList();
+    (await _db.getSections()).map((m) => Section.fromMap(m)).toList()
+      ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
+
 
     // Portada
     doc.addPage(_buildCoverPage(style, seller, montserrat, playlist, bukhari));

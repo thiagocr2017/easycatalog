@@ -21,18 +21,27 @@ class _SectionsPageState extends State<SectionsPage> {
   }
 
   Future<void> _loadSections() async {
+    await _db.ensureSectionOrderColumn();
     final data = await _db.getSections();
     if (!mounted) return;
     setState(() {
-      _sections = data.map((e) => Section.fromMap(e)).toList();
+      _sections = data.map((e) => Section.fromMap(e)).toList()
+        ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
     });
+  }
+
+  Future<void> _saveNewOrder() async {
+    for (int i = 0; i < _sections.length; i++) {
+      final s = _sections[i];
+      await _db.updateSection({'id': s.id, 'name': s.name, 'sortOrder': i});
+    }
   }
 
   Future<void> _addSection() async {
     final name = _controller.text.trim();
     if (name.isEmpty) return;
 
-    await _db.insertSection({'name': name});
+    await _db.insertSection({'name': name, 'sortOrder': _sections.length});
     _controller.clear();
 
     if (!mounted) return;
@@ -67,7 +76,11 @@ class _SectionsPageState extends State<SectionsPage> {
     if (newName != null &&
         newName.isNotEmpty &&
         newName != section.name) {
-      await _db.updateSection({'id': section.id, 'name': newName});
+      await _db.updateSection({
+        'id': section.id,
+        'name': newName,
+        'sortOrder': section.sortOrder ?? 0,
+      });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sección actualizada a "$newName"')),
@@ -107,7 +120,16 @@ class _SectionsPageState extends State<SectionsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Secciones')),
+      appBar: AppBar(
+        title: const Text('Secciones'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.save),
+            tooltip: 'Guardar orden',
+            onPressed: _saveNewOrder,
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -131,32 +153,40 @@ class _SectionsPageState extends State<SectionsPage> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: ListView.builder(
-                itemCount: _sections.length,
-                itemBuilder: (context, i) {
-                  final section = _sections[i];
-                  return Card(
-                    child: ListTile(
-                      title: Text(section.name),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined),
-                            tooltip: 'Editar sección',
-                            onPressed: () => _editSection(section),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            tooltip: 'Eliminar sección',
-                            onPressed: () =>
-                                _confirmDeleteSection(section),
-                          ),
-                        ],
+              child: ReorderableListView(
+                onReorder: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) newIndex -= 1;
+                    final item = _sections.removeAt(oldIndex);
+                    _sections.insert(newIndex, item);
+                  });
+                },
+                children: [
+                  for (final section in _sections)
+                    Card(
+                      key: ValueKey(section.id),
+                      child: ListTile(
+                        title: Text(section.name),
+                        leading: const Icon(Icons.drag_handle),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined),
+                              tooltip: 'Editar sección',
+                              onPressed: () => _editSection(section),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              tooltip: 'Eliminar sección',
+                              onPressed: () =>
+                                  _confirmDeleteSection(section),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  );
-                },
+                ],
               ),
             ),
           ],
