@@ -5,9 +5,9 @@ class Product {
   final double price;
   final String? imagePath;
   final int? sectionId;
-  final bool isDepleted;
+  bool isDepleted; // ← antes era final
   final String createdAt;
-  final String? depletedAt; // ✅ nueva propiedad opcional
+  String? depletedAt; // ← antes era final
 
   Product({
     this.id,
@@ -42,7 +42,8 @@ class Product {
       imagePath: map['imagePath'] as String?,
       sectionId: map['sectionId'] as int?,
       isDepleted: (map['isDepleted'] ?? 0) == 1,
-      createdAt: map['createdAt'] as String? ?? DateTime.now().toIso8601String(),
+      createdAt:
+      map['createdAt'] as String? ?? DateTime.now().toIso8601String(),
       depletedAt: map['depletedAt'] as String?,
     );
   }

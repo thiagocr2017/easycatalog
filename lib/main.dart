@@ -10,7 +10,6 @@ import 'pages/catalog/seller_settings_page.dart';
 import 'pages/catalog/pdf_preview_page.dart';
 import 'pages/admin/depleted_products_page.dart';
 
-
 void main() {
   runApp(const EasyCatalogApp());
 }

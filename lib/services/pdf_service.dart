@@ -24,28 +24,16 @@ class PdfService {
     final ib = await _db.getSetting('style.infoBoxColor');
     final tx = await _db.getSetting('style.textColor');
     final lg = await _db.getSetting('style.logoPath');
+
+    // 🎨 Paleta personalizada (versión verde-lima moderna)
     return StyleSettings(
-      backgroundColor: int.tryParse(bg ?? '') ?? 0xFFF4F7F8,
-      highlightColor: int.tryParse(hl ?? '') ?? 0xFF3A8FB7,
-      infoBoxColor: int.tryParse(ib ?? '') ?? 0xFFE6E1C5,
-      textColor: int.tryParse(tx ?? '') ?? 0xFF222222,
+      backgroundColor: int.tryParse(bg ?? '') ?? 0xFFE1F6B4, // Fondo
+      highlightColor: int.tryParse(hl ?? '') ?? 0xFF50B203, // Destacado
+      infoBoxColor: int.tryParse(ib ?? '') ?? 0xFFEEE9CC,   // Caja de información
+      textColor: int.tryParse(tx ?? '') ?? 0xFF222222,      // Texto
       logoPath: lg,
     );
   }
-
-  // ─────────────────────────────────────────────
-  // Cargar información del vendedor
-  // ─────────────────────────────────────────────
- /* Future<SellerSettings> _loadSellerSettings() async {
-    final name = await _db.getSetting('seller.name');
-    final phone = await _db.getSetting('seller.phone');
-    final msg = await _db.getSetting('seller.message');
-    return SellerSettings(
-      name: name ?? 'Thiago Hernández',
-      phone: phone ?? '+52 55 1234 5678',
-      message: msg ?? 'Hola Thiago, me gustaría hacer un pedido.',
-    );
-  }*/
 
   // ─────────────────────────────────────────────
   // Cargar información del vendedor activo
@@ -158,7 +146,7 @@ class PdfService {
                   pw.Column(
                     children: [
                       pw.Text(
-                        'HyJ',
+                        'El logo va Aqui',
                         style: pw.TextStyle(
                           font: playlist,
                           fontSize: 60,
