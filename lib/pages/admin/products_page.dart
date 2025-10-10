@@ -88,40 +88,56 @@ class _ProductsPageState extends State<ProductsPage> {
               const SizedBox(height: 10),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: imagePath != null
-                      ? Colors.green.shade100
-                      : Theme.of(context).primaryColor,
-                  foregroundColor: imagePath != null
-                      ? Colors.green.shade800
-                      : Colors.white,
+                  backgroundColor:
+                  imagePath != null ? Colors.green.shade100 : Theme.of(context).primaryColor,
+                  foregroundColor:
+                  imagePath != null ? Colors.green.shade800 : Colors.white,
                 ),
                 onPressed: () async {
                   final picker = ImagePicker();
-                  final xfile =
-                  await picker.pickImage(source: ImageSource.gallery);
+                  final xfile = await picker.pickImage(source: ImageSource.gallery);
                   if (xfile == null) return;
+
+                  // Nombre provisional mientras no se ha guardado
+                  String cleanName = nameCtrl.text.trim().toLowerCase();
+
+                  // Si el nombre aún está vacío, usamos timestamp para evitar conflicto
+                  if (cleanName.isEmpty) {
+                    cleanName = 'producto_${DateTime.now().millisecondsSinceEpoch}';
+                  }
+
+                  // Reemplazar espacios y caracteres no válidos
+                  cleanName = cleanName.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+
+                  final ext = xfile.name.split('.').last; // extensión original (jpg, png, etc.)
 
                   final appDir = await getApplicationSupportDirectory();
                   final imagesDir = Directory('${appDir.path}/images');
-                  if (!await imagesDir.exists()) {
-                    await imagesDir.create(recursive: true);
-                  }
+                  if (!await imagesDir.exists()) await imagesDir.create(recursive: true);
 
-                  final fileName = xfile.name;
-                  final newPath = '${imagesDir.path}/$fileName';
+                  final newPath = '${imagesDir.path}/$cleanName.$ext';
+
+                  // Si ya existe una imagen con ese nombre, la sobrescribimos
                   final newFile = await File(xfile.path).copy(newPath);
+
                   imagePath = newFile.path;
 
                   if (!context.mounted) return;
+                  // Actualiza el botón del diálogo
                   (context as Element).markNeedsBuild();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Imagen guardada como "$cleanName.$ext"')),
+                  );
                 },
-                icon: Icon(imagePath != null
-                    ? Icons.check_circle_outline
-                    : Icons.image_outlined),
-                label: Text(imagePath != null
-                    ? 'Imagen seleccionada'
-                    : 'Seleccionar imagen'),
+                icon: Icon(
+                  imagePath != null ? Icons.check_circle_outline : Icons.image_outlined,
+                ),
+                label: Text(
+                  imagePath != null ? 'Imagen seleccionada' : 'Seleccionar imagen',
+                ),
               ),
+
             ],
           ),
         ),
