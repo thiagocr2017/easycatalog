@@ -11,7 +11,6 @@ import '../models/style_settings.dart';
 import '../models/seller_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 class PdfService {
   final _db = DatabaseHelper.instance;
 
@@ -24,36 +23,38 @@ class PdfService {
     final ib = await _db.getSetting('style.infoBoxColor');
     final tx = await _db.getSetting('style.textColor');
     final lg = await _db.getSetting('style.logoPath');
-
-    // 🎨 Paleta personalizada (versión verde-lima moderna)
     return StyleSettings(
-      backgroundColor: int.tryParse(bg ?? '') ?? 0xFFE1F6B4, // Fondo
-      highlightColor: int.tryParse(hl ?? '') ?? 0xFF50B203, // Destacado
-      infoBoxColor: int.tryParse(ib ?? '') ?? 0xFFEEE9CC,   // Caja de información
-      textColor: int.tryParse(tx ?? '') ?? 0xFF222222,      // Texto
+      backgroundColor: int.tryParse(bg ?? '') ?? 0xFFE1F6B4,
+      highlightColor: int.tryParse(hl ?? '') ?? 0xFF50B203,
+      infoBoxColor: int.tryParse(ib ?? '') ?? 0xFFEEE9CC,
+      textColor: int.tryParse(tx ?? '') ?? 0xFF222222,
       logoPath: lg,
     );
   }
 
   // ─────────────────────────────────────────────
-  // Cargar información del vendedor activo
+  // Cargar vendedor activo
   // ─────────────────────────────────────────────
   Future<SellerSettings> _loadSellerSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final activeId = prefs.getInt('activeSellerId') ?? 1;
-
     final data = await _db.getSellerSettings(activeId);
-
     return SellerSettings(
-      name: data['name'] ?? 'Thiago Hernández',
-      phone: data['phone'] ?? '+52 55 1234 5678',
+      name: data['name'] ?? 'Thiago Lopez',
+      phone: data['phone'] ?? '+506 55 1234 5678',
       message: data['message'] ?? 'Hola Thiago, me gustaría hacer un pedido.',
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Cargar métodos de pago
+  // ─────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> _loadPaymentMethods() async {
+    return await _db.getPaymentMethods();
+  }
 
   // ─────────────────────────────────────────────
-  // Conversión de color
+  // Conversión de color ARGB → PdfColor
   // ─────────────────────────────────────────────
   PdfColor _colorFromInt(int argb) {
     final r = ((argb >> 16) & 0xFF) / 255.0;
@@ -69,6 +70,7 @@ class PdfService {
     final doc = pw.Document();
     final style = await _loadStyle();
     final seller = await _loadSellerSettings();
+    final payments = await _loadPaymentMethods();
 
     final montserrat =
     pw.Font.ttf(await rootBundle.load('assets/fonts/Montserrat-Regular.ttf'));
@@ -83,9 +85,8 @@ class PdfService {
     (await _db.getSections()).map((m) => Section.fromMap(m)).toList()
       ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
 
-
     // Portada
-    doc.addPage(_buildCoverPage(style, seller, montserrat, playlist, bukhari));
+    doc.addPage(_buildCoverPage(style, seller, payments, montserrat, playlist, bukhari));
 
     // Secciones + productos
     final allProducts =
@@ -97,7 +98,7 @@ class PdfService {
           .toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-      if (products.isEmpty) continue; // omitir secciones vacías
+      if (products.isEmpty) continue;
 
       doc.addPage(_buildSectionPage(section, style, montserrat));
       for (var i = 0; i < products.length; i += 2) {
@@ -115,6 +116,7 @@ class PdfService {
   pw.Page _buildCoverPage(
       StyleSettings s,
       SellerSettings seller,
+      List<Map<String, dynamic>> payments,
       pw.Font montserrat,
       pw.Font playlist,
       pw.Font bukhari,
@@ -128,224 +130,179 @@ class PdfService {
     return pw.Page(
       pageFormat: PdfPageFormat.a4,
       margin: pw.EdgeInsets.zero,
-      build: (context) {
-        return pw.Container(
-          width: double.infinity,
-          height: double.infinity,
-          color: _colorFromInt(s.backgroundColor),
-          child: pw.Center(
-            child: pw.Column(
-              mainAxisAlignment: pw.MainAxisAlignment.center,
-              children: [
-                if (s.logoPath != null && File(s.logoPath!).existsSync())
-                  pw.Image(
-                    pw.MemoryImage(File(s.logoPath!).readAsBytesSync()),
-                    height: 180,
-                  )
-                else
-                  pw.Column(
-                    children: [
-                      pw.Text(
-                        'El logo va Aqui',
-                        style: pw.TextStyle(
-                          font: playlist,
-                          fontSize: 60,
-                          color: _colorFromInt(s.highlightColor),
-                        ),
+      build: (context) => pw.Container(
+        color: _colorFromInt(s.backgroundColor),
+        padding: const pw.EdgeInsets.all(32),
+        child: pw.Column(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            if (s.logoPath != null && File(s.logoPath!).existsSync())
+              pw.Image(pw.MemoryImage(File(s.logoPath!).readAsBytesSync()), height: 160)
+            else
+              pw.Text(
+                'HyJ Souvenir Bisutería',
+                style: pw.TextStyle(font: bukhari, fontSize: 36, color: _colorFromInt(s.textColor)),
+              ),
+            pw.SizedBox(height: 24),
+            pw.Text(seller.name, style: pw.TextStyle(font: montserrat, fontSize: 18, color: _colorFromInt(s.textColor))),
+            pw.SizedBox(height: 4),
+            pw.Text(seller.phone, style: pw.TextStyle(font: montserrat, fontSize: 14, color: _colorFromInt(s.textColor))),
+            pw.SizedBox(height: 24),
+            pw.SvgImage(svg: svgData),
+            pw.SizedBox(height: 40),
+            if (payments.isNotEmpty)
+              pw.Column(
+                children: [
+                  pw.Text('Métodos de Pago',
+                      style: pw.TextStyle(
+                          font: montserrat,
+                          fontWeight: pw.FontWeight.bold,
+                          fontSize: 16,
+                          color: _colorFromInt(s.highlightColor))),
+                  pw.SizedBox(height: 12),
+                  ...payments.map((pm) {
+                    final logo = pm['logoPath'] as String?;
+                    final name = (pm['name'] ?? '').toString();
+                    final info = (pm['info'] ?? '').toString();
+                    final beneficiary = (pm['beneficiary'] ?? '').toString();
+
+                    return pw.Padding(
+                      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+                      child: pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.center,
+                        children: [
+                          if (logo != null && File(logo).existsSync())
+                            pw.Image(pw.MemoryImage(File(logo).readAsBytesSync()), height: 40),
+                          pw.SizedBox(width: 8),
+                          pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text(name, style: pw.TextStyle(font: montserrat, fontSize: 12)),
+                              pw.Text(info, style: pw.TextStyle(font: montserrat, fontSize: 10)),
+                              pw.Text(beneficiary,
+                                  style: pw.TextStyle(
+                                      font: montserrat,
+                                      fontSize: 10,
+                                      fontWeight: pw.FontWeight.bold,
+                                      color: _colorFromInt(s.highlightColor))),
+                            ],
+                          ),
+                        ],
                       ),
-                      pw.Text(
-                        'Souvenir Bisutería',
-                        style: pw.TextStyle(
-                          font: bukhari,
-                          fontSize: 28,
-                          color: _colorFromInt(s.textColor),
-                        ),
-                      ),
-                    ],
-                  ),
-                pw.SizedBox(height: 40),
-                pw.Text(
-                  seller.name,
-                  style: pw.TextStyle(
-                    font: montserrat,
-                    fontSize: 20,
-                    color: _colorFromInt(s.textColor),
-                  ),
-                ),
-                pw.SizedBox(height: 8),
-                pw.Text(
-                  seller.phone,
-                  style: pw.TextStyle(
-                    font: montserrat,
-                    fontSize: 16,
-                    color: _colorFromInt(s.textColor),
-                  ),
-                ),
-                pw.SizedBox(height: 20),
-                pw.SvgImage(svg: svgData),
-              ],
-            ),
-          ),
-        );
-      },
+                    );
+                  }),
+                ],
+              ),
+          ],
+        ),
+      ),
     );
   }
 
   // ─────────────────────────────────────────────
   // Página de sección
   // ─────────────────────────────────────────────
-  pw.Page _buildSectionPage(Section sct, StyleSettings s, pw.Font font) {
-    return pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: pw.EdgeInsets.zero,
-      build: (_) {
-        return pw.Container(
-          width: double.infinity,
-          height: double.infinity,
-          color: _colorFromInt(s.backgroundColor),
-          child: pw.Center(
-            child: pw.Text(
-              sct.name.toUpperCase(),
-              style: pw.TextStyle(
+  pw.Page _buildSectionPage(Section section, StyleSettings s, pw.Font font) => pw.Page(
+    pageFormat: PdfPageFormat.a4,
+    margin: pw.EdgeInsets.zero,
+    build: (_) => pw.Container(
+      color: _colorFromInt(s.backgroundColor),
+      child: pw.Center(
+        child: pw.Text(section.name.toUpperCase(),
+            style: pw.TextStyle(
                 font: font,
                 fontWeight: pw.FontWeight.bold,
                 fontSize: 36,
-                color: _colorFromInt(s.highlightColor),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+                color: _colorFromInt(s.highlightColor))),
+      ),
+    ),
+  );
 
   // ─────────────────────────────────────────────
-  // Página de productos (2 por página)
+  // Página de productos
   // ─────────────────────────────────────────────
-  pw.Page _buildProductsPage(
-      List<Product> products,
-      StyleSettings s,
-      pw.Font titleFont,
-      pw.Font textFont,
-      ) {
-    return pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: pw.EdgeInsets.zero,
-      build: (context) {
-        return pw.Container(
-          color: _colorFromInt(s.backgroundColor),
-          padding: const pw.EdgeInsets.all(24),
-          child: pw.Column(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-            children:
-            products.map((p) => _productCard(p, s, titleFont, textFont)).toList(),
-          ),
-        );
-      },
-    );
-  }
+  pw.Page _buildProductsPage(List<Product> products, StyleSettings s, pw.Font titleFont, pw.Font textFont) => pw.Page(
+    pageFormat: PdfPageFormat.a4,
+    margin: pw.EdgeInsets.zero,
+    build: (_) => pw.Container(
+      color: _colorFromInt(s.backgroundColor),
+      padding: const pw.EdgeInsets.all(24),
+      child: pw.Column(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+        children: products.map((p) => _productCard(p, s, titleFont, textFont)).toList(),
+      ),
+    ),
+  );
 
   // ─────────────────────────────────────────────
-  // Tarjeta de producto individual
+  // Tarjeta de producto
   // ─────────────────────────────────────────────
-  pw.Widget _productCard(
-      Product p,
-      StyleSettings s,
-      pw.Font titleFont,
-      pw.Font textFont,
-      ) {
+  pw.Widget _productCard(Product p, StyleSettings s, pw.Font titleFont, pw.Font textFont) {
     final hasImage = p.imagePath != null && File(p.imagePath!).existsSync();
     pw.ImageProvider? img;
-    if (hasImage) {
-      final bytes = File(p.imagePath!).readAsBytesSync();
-      img = pw.MemoryImage(bytes);
-    }
+    if (hasImage) img = pw.MemoryImage(File(p.imagePath!).readAsBytesSync());
 
     return pw.Container(
       height: 320,
       margin: const pw.EdgeInsets.symmetric(vertical: 12),
-      decoration: pw.BoxDecoration(
-        color: _colorFromInt(s.infoBoxColor),
-        borderRadius: pw.BorderRadius.circular(12),
-      ),
+      decoration: pw.BoxDecoration(color: _colorFromInt(s.infoBoxColor), borderRadius: pw.BorderRadius.circular(12)),
       padding: const pw.EdgeInsets.all(12),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          // Imagen del producto (vertical, bordes redondeados)
           pw.Container(
             width: 180,
             height: 260,
-            decoration: pw.BoxDecoration(
-              color: _colorFromInt(s.highlightColor),
-              borderRadius: pw.BorderRadius.circular(16),
-            ),
+            decoration:
+            pw.BoxDecoration(color: _colorFromInt(s.highlightColor), borderRadius: pw.BorderRadius.circular(16)),
             child: hasImage
                 ? pw.ClipRRect(
               horizontalRadius: 16,
               verticalRadius: 16,
-              child: pw.Image(
-                img!,
-                fit: pw.BoxFit.cover,
-                alignment: pw.Alignment.center,
-              ),
+              child: pw.Image(img!, fit: pw.BoxFit.cover),
             )
                 : pw.Center(
-              child: pw.Text(
-                'Sin imagen',
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(
-                  font: textFont,
-                  fontSize: 12,
-                  color: _colorFromInt(s.textColor),
-                ),
-              ),
+              child: pw.Text('Sin imagen',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(font: textFont, fontSize: 12, color: _colorFromInt(s.textColor))),
             ),
           ),
           pw.SizedBox(width: 20),
-          // Información del producto
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Container(
-                  margin: const pw.EdgeInsets.only(bottom: 10),
-                  padding:
-                  const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  margin: const pw.EdgeInsets.only(bottom: 14),
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 14), // más alto y más ancho
+                  width: double.infinity,
                   decoration: pw.BoxDecoration(
                     color: _colorFromInt(s.highlightColor),
-                    borderRadius: pw.BorderRadius.circular(10),
+                    borderRadius: pw.BorderRadius.circular(12),
                   ),
-                  width: double.infinity,
-                  child: pw.Text(
-                    p.name,
-                    textAlign: pw.TextAlign.left,
-                    style: pw.TextStyle(
-                      font: titleFont,
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 20,
-                      color: _colorFromInt(s.backgroundColor),
+                  child: pw.Align(
+                    child: pw.Text(
+                      p.name,
+                      textAlign: pw.TextAlign.justify,
+                      style: pw.TextStyle(
+                        font: titleFont,
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 22, // un poco más grande
+                        color: _colorFromInt(s.backgroundColor),
+                      ),
                     ),
                   ),
                 ),
-                pw.Text(
-                  p.description,
-                  style: pw.TextStyle(
-                    font: textFont,
-                    fontSize: 14,
-                    color: _colorFromInt(s.textColor),
-                  ),
-                ),
+                pw.Text(p.description,
+                    style: pw.TextStyle(font: textFont, fontSize: 14, color: _colorFromInt(s.textColor))),
                 pw.SizedBox(height: 12),
-                pw.Text(
-                  '\$${p.price.toStringAsFixed(2)}',
-                  style: pw.TextStyle(
-                    font: titleFont,
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 20,
-                    color: _colorFromInt(s.highlightColor),
-                  ),
-                ),
+                pw.Text('\$${p.price.toStringAsFixed(2)}',
+                    style: pw.TextStyle(
+                        font: titleFont,
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 20,
+                        color: _colorFromInt(s.highlightColor))),
               ],
             ),
           ),
@@ -353,83 +310,160 @@ class PdfService {
       ),
     );
   }
+
   // ─────────────────────────────────────────────
-  // Generar el PDF de productos agotados
+  // Reporte de productos agotados con fecha de reactivación
+  // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Reporte de productos agotados con fecha de reactivación
   // ─────────────────────────────────────────────
   Future<Uint8List> buildDepletedProductsReport(List<Product> products) async {
     final doc = pw.Document();
-    final montserrat =
-    pw.Font.ttf(await rootBundle.load('assets/fonts/Montserrat-Regular.ttf'));
-    final openSans =
-    pw.Font.ttf(await rootBundle.load('assets/fonts/OpenSans-Regular.ttf'));
+    final montserrat = pw.Font.ttf(await rootBundle.load('assets/fonts/Montserrat-Regular.ttf'));
+    final openSans = pw.Font.ttf(await rootBundle.load('assets/fonts/OpenSans-Regular.ttf'));
 
+    // 🔹 Preparamos los datos primero (antes del map)
+    final productData = <Map<String, dynamic>>[];
+
+    for (final p in products) {
+      final createdAt = DateTime.tryParse(p.createdAt);
+      final depletedAt = DateTime.tryParse(p.depletedAt ?? '');
+      final logs = await _db.getProductLogs(p.id!);
+
+      // Encontrar última reactivación
+      DateTime? lastReactivation;
+      for (final log in logs) {
+        if (log['action'] == 'reactivado') {
+          final d = DateTime.tryParse(log['timestamp']);
+          if (d != null) {
+            if (lastReactivation == null || d.isAfter(lastReactivation)) {
+              lastReactivation = d;
+            }
+          }
+        }
+      }
+
+      productData.add({
+        'product': p,
+        'createdAt': createdAt,
+        'depletedAt': depletedAt,
+        'lastReactivation': lastReactivation,
+      });
+    }
+
+    // 🔹 Construcción del PDF
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('Reporte de Productos Agotados',
-                  style: pw.TextStyle(
-                      font: montserrat, fontSize: 22, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 20),
-              ...products.map((p) {
-                final date = DateTime.tryParse(p.depletedAt ?? '');
-                final formatted = date != null
-                    ? '${date.day}/${date.month}/${date.year}'
-                    : '';
-                pw.ImageProvider? img;
-                if (p.imagePath != null && File(p.imagePath!).existsSync()) {
-                  img = pw.MemoryImage(File(p.imagePath!).readAsBytesSync());
-                }
-                return pw.Container(
-                  margin: const pw.EdgeInsets.only(bottom: 16),
-                  child: pw.Row(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Container(
-                        width: 80,
-                        height: 80,
+        margin: const pw.EdgeInsets.all(24),
+        build: (_) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Reporte de Productos Agotados',
+              style: pw.TextStyle(
+                font: montserrat,
+                fontSize: 22,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            ...productData.map((entry) {
+              final Product p = entry['product'];
+              final createdAt = entry['createdAt'] as DateTime?;
+              final depletedAt = entry['depletedAt'] as DateTime?;
+              final lastReactivation = entry['lastReactivation'] as DateTime?;
+              final img = (p.imagePath != null && File(p.imagePath!).existsSync())
+                  ? pw.MemoryImage(File(p.imagePath!).readAsBytesSync())
+                  : null;
+
+              final logText = StringBuffer();
+              if (createdAt != null) {
+                logText.writeln('Creado: ${createdAt.day}/${createdAt.month}/${createdAt.year}');
+              }
+              if (lastReactivation != null) {
+                logText.writeln('Reactivado: ${lastReactivation.day}/${lastReactivation.month}/${lastReactivation.year}');
+              }
+              if (depletedAt != null) {
+                logText.writeln('Agotado: ${depletedAt.day}/${depletedAt.month}/${depletedAt.year}');
+              }
+
+              return pw.Container(
+                margin: const pw.EdgeInsets.only(bottom: 16),
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey200,
+                  borderRadius: pw.BorderRadius.circular(8),
+                ),
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      width: 80,
+                      height: 80,
+                      decoration: pw.BoxDecoration(
                         color: PdfColors.grey300,
-                        child: img != null
-                            ? pw.Image(img, fit: pw.BoxFit.cover)
-                            : pw.Center(child: pw.Text('Sin imagen')),
+                        borderRadius: pw.BorderRadius.circular(6),
                       ),
-                      pw.SizedBox(width: 12),
-                      pw.Expanded(
-                        child: pw.Column(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text(p.name,
-                                style: pw.TextStyle(
-                                    font: montserrat,
-                                    fontSize: 16,
-                                    fontWeight: pw.FontWeight.bold)),
-                            pw.Text(p.description,
-                                style: pw.TextStyle(
-                                    font: openSans,
-                                    fontSize: 12,
-                                    color: PdfColors.grey800)),
-                            pw.Text('Precio: \$${p.price.toStringAsFixed(2)}',
-                                style: pw.TextStyle(
-                                    font: openSans, fontSize: 12)),
-                            pw.Text('Agotado: $formatted',
-                                style: pw.TextStyle(
-                                    font: openSans, fontSize: 11,
-                                    color: PdfColors.red)),
-                          ],
+                      child: img != null
+                          ? pw.ClipRRect(
+                        horizontalRadius: 6,
+                        verticalRadius: 6,
+                        child: pw.Image(img, fit: pw.BoxFit.cover),
+                      )
+                          : pw.Center(
+                        child: pw.Text(
+                          'Sin imagen',
+                          style: pw.TextStyle(
+                            font: openSans,
+                            fontSize: 10,
+                            color: PdfColors.grey600,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          );
-        },
+                    ),
+                    pw.SizedBox(width: 12),
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            p.name,
+                            style: pw.TextStyle(
+                              font: montserrat,
+                              fontSize: 16,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.Text(
+                            p.description,
+                            style: pw.TextStyle(
+                              font: openSans,
+                              fontSize: 12,
+                              color: PdfColors.grey800,
+                            ),
+                          ),
+                          pw.Text(
+                            'Precio: \$${p.price.toStringAsFixed(2)}',
+                            style: pw.TextStyle(font: openSans, fontSize: 12),
+                          ),
+                          pw.SizedBox(height: 6),
+                          pw.Text(
+                            logText.toString(),
+                            style: pw.TextStyle(font: openSans, fontSize: 11, color: PdfColors.black),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
       ),
     );
+
     return doc.save();
   }
 }

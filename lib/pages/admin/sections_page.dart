@@ -21,7 +21,6 @@ class _SectionsPageState extends State<SectionsPage> {
   }
 
   Future<void> _loadSections() async {
-    await _db.ensureSectionOrderColumn();
     final data = await _db.getSections();
     if (!mounted) return;
     setState(() {
