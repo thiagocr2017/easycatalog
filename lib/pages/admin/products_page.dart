@@ -186,28 +186,53 @@ class _ProductsPageState extends State<ProductsPage> {
 
   Future<void> _toggleDepleted(Product p) async {
     final newState = !p.isDepleted;
+    final actionText = newState ? 'agotar' : 'reactivar';
+
+    // 🔔 Confirmación
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(newState ? 'Marcar como agotado' : 'Reactivar producto'),
+        content: Text(
+          '¿Seguro que deseas $actionText el producto "${p.name}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí, continuar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return; // Cancelado por el usuario
+
+    // ✅ Actualizar estado en la base de datos
     final updated = p.toMap();
     updated['isDepleted'] = newState ? 1 : 0;
     updated['depletedAt'] = newState ? DateTime.now().toIso8601String() : null;
+
     await _db.updateProduct(updated);
     await _db.insertProductLog(p.id!, newState ? 'agotado' : 'reactivado');
 
     if (!mounted) return;
-    setState(() {
-      p.isDepleted = newState;
-      p.depletedAt =
-      newState ? DateTime.now().toIso8601String() : null;
-    });
+    _loadData();
 
+    // Mostrar notificación final
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(newState
-            ? 'Producto "${p.name}" marcado como agotado'
-            : 'Producto "${p.name}" reactivado'),
-        duration: const Duration(seconds: 2),
+        content: Text(
+          'Producto "${p.name}" ${newState ? 'marcado como agotado' : 'reactivado'}',
+        ),
+        backgroundColor: newState ? Colors.red.shade400 : Colors.green.shade600,
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

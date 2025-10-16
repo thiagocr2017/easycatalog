@@ -113,7 +113,159 @@ class PdfService {
   // ─────────────────────────────────────────────
   // Portada del catálogo
   // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+// Portada del catálogo (versión corregida sin bordes blancos)
+// ─────────────────────────────────────────────
   pw.Page _buildCoverPage(
+      StyleSettings s,
+      SellerSettings seller,
+      List<Map<String, dynamic>> payments,
+      pw.Font montserrat,
+      pw.Font playlist,
+      pw.Font bukhari,
+      ) {
+    final qr = Barcode.qrCode();
+    final cleanedPhone = seller.phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final encodedMsg = Uri.encodeComponent(seller.message);
+    final waLink = 'https://wa.me/$cleanedPhone?text=$encodedMsg';
+    final svgData = qr.toSvg(waLink, width: 80, height: 80);
+
+    return pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: pw.EdgeInsets.zero,
+      build: (context) => pw.Container(
+        width: double.infinity,
+        height: double.infinity,
+        color: _colorFromInt(s.backgroundColor), // ✅ Fondo completo
+        child: pw.Padding(
+          padding: const pw.EdgeInsets.all(32), // ✅ Solo afecta al contenido
+          child: pw.Column(
+            mainAxisAlignment: pw.MainAxisAlignment.center,
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              // 🔹 Logo o título
+              if (s.logoPath != null && File(s.logoPath!).existsSync())
+                pw.Image(
+                  pw.MemoryImage(File(s.logoPath!).readAsBytesSync()),
+                  height: 160,
+                )
+              else
+                pw.Text(
+                  'HyJ Souvenir Bisutería',
+                  style: pw.TextStyle(
+                    font: bukhari,
+                    fontSize: 36,
+                    color: _colorFromInt(s.textColor),
+                  ),
+                ),
+
+              pw.SizedBox(height: 24),
+
+              // 🔹 Datos del vendedor
+              pw.Text(
+                seller.name,
+                style: pw.TextStyle(
+                  font: montserrat,
+                  fontSize: 18,
+                  color: _colorFromInt(s.textColor),
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                seller.phone,
+                style: pw.TextStyle(
+                  font: montserrat,
+                  fontSize: 14,
+                  color: _colorFromInt(s.textColor),
+                ),
+              ),
+
+              pw.SizedBox(height: 24),
+
+              // 🔹 Código QR de contacto
+              pw.SvgImage(svg: svgData),
+
+              pw.SizedBox(height: 40),
+
+              // 🔹 Métodos de pago
+              if (payments.isNotEmpty)
+                pw.Column(
+                  children: [
+                    pw.Text(
+                      'Métodos de Pago',
+                      style: pw.TextStyle(
+                        font: montserrat,
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 16,
+                        color: _colorFromInt(s.highlightColor),
+                      ),
+                    ),
+                    pw.SizedBox(height: 12),
+                    ...payments.map((pm) {
+                      final logo = pm['logoPath'] as String?;
+                      final name = (pm['name'] ?? '').toString();
+                      final info = (pm['info'] ?? '').toString();
+                      final beneficiary =
+                      (pm['beneficiary'] ?? '').toString();
+
+                      return pw.Padding(
+                        padding:
+                        const pw.EdgeInsets.symmetric(vertical: 4),
+                        child: pw.Row(
+                          mainAxisAlignment:
+                          pw.MainAxisAlignment.center,
+                          children: [
+                            if (logo != null && File(logo).existsSync())
+                              pw.Image(
+                                pw.MemoryImage(
+                                    File(logo).readAsBytesSync()),
+                                height: 40,
+                              ),
+                            pw.SizedBox(width: 8),
+                            pw.Column(
+                              crossAxisAlignment:
+                              pw.CrossAxisAlignment.start,
+                              children: [
+                                pw.Text(
+                                  name,
+                                  style: pw.TextStyle(
+                                    font: montserrat,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                pw.Text(
+                                  info,
+                                  style: pw.TextStyle(
+                                    font: montserrat,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                pw.Text(
+                                  beneficiary,
+                                  style: pw.TextStyle(
+                                    font: montserrat,
+                                    fontSize: 10,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: _colorFromInt(
+                                        s.highlightColor),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+/*  pw.Page _buildCoverPage(
       StyleSettings s,
       SellerSettings seller,
       List<Map<String, dynamic>> payments,
@@ -198,7 +350,7 @@ class PdfService {
         ),
       ),
     );
-  }
+  }*/
 
   // ─────────────────────────────────────────────
   // Página de sección
@@ -284,7 +436,7 @@ class PdfService {
                   child: pw.Align(
                     child: pw.Text(
                       p.name,
-                      textAlign: pw.TextAlign.justify,
+                      textAlign: pw.TextAlign.left,
                       style: pw.TextStyle(
                         font: titleFont,
                         fontWeight: pw.FontWeight.bold,
@@ -311,9 +463,6 @@ class PdfService {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Reporte de productos agotados con fecha de reactivación
-  // ─────────────────────────────────────────────
   // ─────────────────────────────────────────────
   // Reporte de productos agotados con fecha de reactivación
   // ─────────────────────────────────────────────
