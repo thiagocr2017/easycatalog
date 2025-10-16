@@ -10,9 +10,9 @@ class SellerSettings {
   });
 
   factory SellerSettings.defaults() => const SellerSettings(
-    name: 'Thiago Hernández',
-    phone: '+52 55 1234 5678',
-    message: 'Hola Thiago, me gustaría hacer un pedido.',
+    name: '',
+    phone: '',
+    message: '',
   );
 
   Map<String, Object?> toMap() => {

@@ -11,138 +11,241 @@ class SellerSettingsPage extends StatefulWidget {
 
 class _SellerSettingsPageState extends State<SellerSettingsPage> {
   final _db = DatabaseHelper.instance;
-  final _nameCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _msgCtrl = TextEditingController();
-  bool _loading = true;
-  int _currentSellerId = 1;
   List<int> _sellerIds = [];
+  int? _activeSellerId;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSellerIds();
+    _loadSellers();
   }
 
-  // 🔹 Cargar lista de vendedores y vendedor activo guardado
-  Future<void> _loadSellerIds() async {
+  // ─────────────────────────────────────────────
+  // Cargar vendedores
+  // ─────────────────────────────────────────────
+  Future<void> _loadSellers() async {
+    setState(() => _loading = true);
     final prefs = await SharedPreferences.getInstance();
-    final savedId = prefs.getInt('activeSellerId');
     final ids = await _db.getAllSellerIds();
+    final activeId = prefs.getInt('activeSellerId');
 
-    if (ids.isEmpty) {
-      await _db.setSellerSetting(1, 'name', 'Thiago Lopez');
-      await _db.setSellerSetting(1, 'phone', '+52 55 1234 5678');
-      await _db.setSellerSetting(1, 'message', 'Hola Thiago, me gustaría hacer un pedido.');
-      ids.add(1);
-    }
-
+    if (!mounted) return;
     setState(() {
       _sellerIds = ids;
-      _currentSellerId = savedId != null && ids.contains(savedId) ? savedId : ids.first;
-    });
-
-    _loadSeller(_currentSellerId);
-  }
-
-  Future<void> _loadSeller(int id) async {
-    setState(() => _loading = true);
-    final data = await _db.getSellerSettings(id);
-    setState(() {
-      _nameCtrl.text = data['name'] ?? 'Thiago Lopez';
-      _phoneCtrl.text = data['phone'] ?? '+52 55 1234 5678';
-      _msgCtrl.text = data['message'] ?? 'Hola Thiago, me gustaría hacer un pedido.';
+      _activeSellerId = activeId ?? (ids.isNotEmpty ? ids.first : null);
       _loading = false;
     });
   }
 
-  Future<void> _save() async {
-    await _db.setSellerSetting(_currentSellerId, 'name', _nameCtrl.text.trim());
-    await _db.setSellerSetting(_currentSellerId, 'phone', _phoneCtrl.text.trim());
-    await _db.setSellerSetting(_currentSellerId, 'message', _msgCtrl.text.trim());
-
-    // 🔹 Guardar ID actual como “activo”
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('activeSellerId', _currentSellerId);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Datos guardados')));
+  // ─────────────────────────────────────────────
+  // Obtener datos de vendedor
+  // ─────────────────────────────────────────────
+  Future<Map<String, String>> _getSellerData(int id) async {
+    final data = await _db.getSellerSettings(id);
+    return {
+      'name': data['name'] ?? '',
+      'phone': data['phone'] ?? '',
+      'message': data['message'] ?? '',
+    };
   }
 
-  Future<void> _addNewSeller() async {
-    final newId = (_sellerIds.isEmpty ? 0 : _sellerIds.last) + 1;
-    await _db.setSellerSetting(newId, 'name', 'Nuevo Vendedor $newId');
-    await _db.setSellerSetting(newId, 'phone', '');
-    await _db.setSellerSetting(newId, 'message', '');
-    await _loadSellerIds();
-    _loadSeller(newId);
+  // ─────────────────────────────────────────────
+  // Crear vendedor
+  // ─────────────────────────────────────────────
+  Future<void> _addSeller() async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final msgCtrl = TextEditingController();
 
-    // Guardar nuevo como activo
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nuevo vendedor'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
+            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Teléfono')),
+            TextField(controller: msgCtrl, decoration: const InputDecoration(labelText: 'Mensaje de WhatsApp')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Guardar')),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    final name = nameCtrl.text.trim();
+    if (name.isEmpty) return;
+
+    final newId = (_sellerIds.isEmpty ? 0 : _sellerIds.last) + 1;
+    await _db.setSellerSetting(newId, 'name', name);
+    await _db.setSellerSetting(newId, 'phone', phoneCtrl.text.trim());
+    await _db.setSellerSetting(newId, 'message', msgCtrl.text.trim());
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('activeSellerId', newId);
+
+    if (!mounted) return;
+    await _loadSellers();
+    _showSnack('Vendedor "$name" agregado');
   }
 
+  // ─────────────────────────────────────────────
+  // Editar vendedor
+  // ─────────────────────────────────────────────
+  Future<void> _editSeller(int id) async {
+    final current = await _getSellerData(id);
+    final nameCtrl = TextEditingController(text: current['name']);
+    final phoneCtrl = TextEditingController(text: current['phone']);
+    final msgCtrl = TextEditingController(text: current['message']);
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar vendedor'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
+            TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Teléfono')),
+            TextField(controller: msgCtrl, decoration: const InputDecoration(labelText: 'Mensaje de WhatsApp')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Guardar')),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _db.setSellerSetting(id, 'name', nameCtrl.text.trim());
+      await _db.setSellerSetting(id, 'phone', phoneCtrl.text.trim());
+      await _db.setSellerSetting(id, 'message', msgCtrl.text.trim());
+      if (!mounted) return;
+      await _loadSellers();
+      _showSnack('Vendedor actualizado');
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Eliminar vendedor
+  // ─────────────────────────────────────────────
+  Future<void> _deleteSeller(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar vendedor'),
+        content: const Text('¿Deseas eliminar este vendedor? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final db = await _db.database;
+    await db.delete('settings', where: 'key LIKE ?', whereArgs: ['seller.$id.%']);
+
+    final prefs = await SharedPreferences.getInstance();
+    final activeId = prefs.getInt('activeSellerId');
+    if (activeId == id) await prefs.remove('activeSellerId');
+
+    if (!mounted) return;
+    await _loadSellers();
+    _showSnack('Vendedor eliminado');
+  }
+
+  // ─────────────────────────────────────────────
+  // Activar vendedor
+  // ─────────────────────────────────────────────
+  Future<void> _setActiveSeller(int id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('activeSellerId', id);
+    if (!mounted) return;
+    setState(() => _activeSellerId = id);
+  }
+
+  // ─────────────────────────────────────────────
+  // Snackbar segura (sin usar context después de await)
+  // ─────────────────────────────────────────────
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  // ─────────────────────────────────────────────
+  // UI PRINCIPAL
+  // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Configuración del vendedor')),
+        appBar: AppBar(title: const Text('Vendedores')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Configuración del vendedor'),
+        title: const Text('Vendedores'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'Nuevo vendedor',
-            onPressed: _addNewSeller,
-          )
+          IconButton(icon: const Icon(Icons.add), tooltip: 'Agregar', onPressed: _addSeller),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            DropdownButton<int>(
-              value: _currentSellerId,
-              items: _sellerIds
-                  .map((id) => DropdownMenuItem(
-                value: id,
-                child: Text('Vendedor $id'),
-              ))
-                  .toList(),
-              onChanged: (id) async {
-                if (id == null) return;
-                setState(() => _currentSellerId = id);
-                _loadSeller(id);
+      body: _sellerIds.isEmpty
+          ? const Center(child: Text('No hay vendedores aún'))
+          : ListView.builder(
+        itemCount: _sellerIds.length,
+        itemBuilder: (context, i) {
+          final id = _sellerIds[i];
+          return FutureBuilder<Map<String, String>>(
+            future: _getSellerData(id),
+            builder: (context, snap) {
+              if (!snap.hasData) {
+                return const ListTile(title: Text('Cargando...'));
+              }
+              final d = snap.data!;
+              final name = d['name'] ?? '';
+              final phone = d['phone'] ?? '';
+              final msg = d['message'] ?? '';
 
-                // 🔹 Guardar vendedor seleccionado como activo
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setInt('activeSellerId', id);
-              },
-            ),
-            const SizedBox(height: 16),
-            TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Nombre del vendedor')),
-            const SizedBox(height: 12),
-            TextField(controller: _phoneCtrl, decoration: const InputDecoration(labelText: 'Teléfono')),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _msgCtrl,
-              maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Mensaje de WhatsApp'),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _save,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Guardar'),
-            ),
-          ],
-        ),
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: ListTile(
+                  leading: Radio<int>(
+                    value: id,
+                    groupValue: _activeSellerId,
+                    onChanged: (v) {
+                      if (v != null) _setActiveSeller(v);
+                    },
+                  ),
+                  title: Text(name.isEmpty ? 'Vendedor $id' : name),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (phone.isNotEmpty) Text('Tel: $phone'),
+                      if (msg.isNotEmpty) Text('Msg: $msg'),
+                    ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editSeller(id)),
+                      IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _deleteSeller(id)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

@@ -40,9 +40,9 @@ class PdfService {
     final activeId = prefs.getInt('activeSellerId') ?? 1;
     final data = await _db.getSellerSettings(activeId);
     return SellerSettings(
-      name: data['name'] ?? 'Thiago Lopez',
-      phone: data['phone'] ?? '+506 55 1234 5678',
-      message: data['message'] ?? 'Hola Thiago, me gustaría hacer un pedido.',
+      name: data['name'] ?? '',
+      phone: data['phone'] ?? '',
+      message: data['message'] ?? '',
     );
   }
 
