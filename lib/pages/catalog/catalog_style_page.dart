@@ -26,6 +26,19 @@ class _CatalogStylePageState extends State<CatalogStylePage> {
     _loadPayments();
   }
 
+  // ─────────────────────────────────────────────
+  // MÉTODOS AUXILIARES
+  // ─────────────────────────────────────────────
+  void _safeSnack(String message) {
+    if (mounted && context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // CARGAR CONFIGURACIÓN DE ESTILO
+  // ─────────────────────────────────────────────
   Future<void> _loadStyle() async {
     final bg = await _db.getSetting('style.backgroundColor');
     final hl = await _db.getSetting('style.highlightColor');
@@ -46,12 +59,9 @@ class _CatalogStylePageState extends State<CatalogStylePage> {
     });
   }
 
-  Future<void> _loadPayments() async {
-    final data = await _db.getPaymentMethods();
-    if (!mounted) return;
-    setState(() => _payments = data);
-  }
-
+  // ─────────────────────────────────────────────
+  // GUARDAR CONFIGURACIÓN
+  // ─────────────────────────────────────────────
   Future<void> _saveStyle() async {
     await _db.setSetting('style.backgroundColor', _style.backgroundColor.toString());
     await _db.setSetting('style.highlightColor', _style.highlightColor.toString());
@@ -60,11 +70,12 @@ class _CatalogStylePageState extends State<CatalogStylePage> {
     if (_style.logoPath != null) {
       await _db.setSetting('style.logoPath', _style.logoPath!);
     }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Estilo guardado correctamente')));
+    _safeSnack('Estilo guardado correctamente');
   }
 
+  // ─────────────────────────────────────────────
+  // RESTAURAR COLORES POR DEFECTO
+  // ─────────────────────────────────────────────
   Future<void> _resetToDefault() async {
     setState(() {
       _style = const StyleSettings(
@@ -75,11 +86,12 @@ class _CatalogStylePageState extends State<CatalogStylePage> {
       );
     });
     await _saveStyle();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Colores restaurados a los valores predeterminados')));
+    _safeSnack('Colores restaurados a los valores predeterminados');
   }
 
+  // ─────────────────────────────────────────────
+  // SELECCIONAR LOGO PRINCIPAL
+  // ─────────────────────────────────────────────
   Future<void> _pickLogo() async {
     final picker = ImagePicker();
     final xfile = await picker.pickImage(source: ImageSource.gallery);
@@ -94,8 +106,21 @@ class _CatalogStylePageState extends State<CatalogStylePage> {
 
     if (!mounted) return;
     setState(() => _style = _style.copyWith(logoPath: newFile.path));
+    _safeSnack('Logo principal seleccionado correctamente');
   }
 
+  // ─────────────────────────────────────────────
+  // CARGAR MÉTODOS DE PAGO
+  // ─────────────────────────────────────────────
+  Future<void> _loadPayments() async {
+    final data = await _db.getPaymentMethods();
+    if (!mounted) return;
+    setState(() => _payments = data);
+  }
+
+  // ─────────────────────────────────────────────
+  // AGREGAR O EDITAR MÉTODO DE PAGO
+  // ─────────────────────────────────────────────
   Future<void> _addOrEditPayment({Map<String, dynamic>? payment}) async {
     final nameCtrl = TextEditingController(text: (payment?['name'] ?? '').toString());
     final infoCtrl = TextEditingController(text: (payment?['info'] ?? '').toString());
@@ -104,70 +129,83 @@ class _CatalogStylePageState extends State<CatalogStylePage> {
 
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(payment == null ? 'Nuevo método de pago' : 'Editar método de pago'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre del método')),
-              TextField(controller: infoCtrl, decoration: const InputDecoration(labelText: 'Información (cuenta, IBAN, etc.)')),
-              TextField(controller: beneficiaryCtrl, decoration: const InputDecoration(labelText: 'Beneficiario')),
-              const SizedBox(height: 10),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final picker = ImagePicker();
-                  final xfile = await picker.pickImage(source: ImageSource.gallery);
-                  if (xfile == null) return;
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(payment == null ? 'Nuevo método de pago' : 'Editar método de pago'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre del método')),
+                TextField(controller: infoCtrl, decoration: const InputDecoration(labelText: 'Información (cuenta, IBAN, etc.)')),
+                TextField(controller: beneficiaryCtrl, decoration: const InputDecoration(labelText: 'Beneficiario')),
+                const SizedBox(height: 10),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final picker = ImagePicker();
+                    final xfile = await picker.pickImage(source: ImageSource.gallery);
+                    if (xfile == null) return;
 
-                  final appDir = await getApplicationSupportDirectory();
-                  final logosDir = Directory('${appDir.path}/logos');
-                  if (!await logosDir.exists()) await logosDir.create(recursive: true);
-                  final newPath = '${logosDir.path}/${xfile.name}';
-                  final newFile = await File(xfile.path).copy(newPath);
-                  logoPath = newFile.path;
-                  setState(() {}); // refrescar el diálogo
-                },
-                icon: const Icon(Icons.image_outlined),
-                label: Text(logoPath != null ? 'Logo seleccionado' : 'Seleccionar logo'),
-              ),
-            ],
+                    final appDir = await getApplicationSupportDirectory();
+                    final logosDir = Directory('${appDir.path}/logos');
+                    if (!await logosDir.exists()) await logosDir.create(recursive: true);
+                    final newPath = '${logosDir.path}/${xfile.name}';
+                    final newFile = await File(xfile.path).copy(newPath);
+                    logoPath = newFile.path;
+
+                    setDialogState(() {}); // refresca solo el diálogo
+                    _safeSnack('Logo del método seleccionado correctamente');
+                  },
+                  icon: const Icon(Icons.image_outlined),
+                  label: Text(logoPath != null ? 'Logo seleccionado' : 'Seleccionar logo'),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () async {
+                final data = {
+                  'id': payment?['id'],
+                  'name': nameCtrl.text.trim(),
+                  'info': infoCtrl.text.trim(),
+                  'beneficiary': beneficiaryCtrl.text.trim(),
+                  'logoPath': logoPath,
+                };
+                if (payment == null) {
+                  await _db.insertPaymentMethod(data);
+                } else {
+                  await _db.updatePaymentMethod(data);
+                }
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+
+                _loadPayments();
+                _safeSnack('Método de pago guardado correctamente');
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () async {
-              final data = {
-                'id': payment?['id'],
-                'name': nameCtrl.text.trim(),
-                'info': infoCtrl.text.trim(),
-                'beneficiary': beneficiaryCtrl.text.trim(),
-                'logoPath': logoPath,
-              };
-
-              if (payment == null) {
-                await _db.insertPaymentMethod(data);
-              } else {
-                await _db.updatePaymentMethod(data);
-              }
-
-              if (!mounted) return;
-              Navigator.pop(context);
-              _loadPayments();
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
       ),
     );
   }
 
+  // ─────────────────────────────────────────────
+  // ELIMINAR MÉTODO DE PAGO
+  // ─────────────────────────────────────────────
   Future<void> _deletePayment(int id) async {
     await _db.deletePaymentMethod(id);
     _loadPayments();
+    _safeSnack('Método de pago eliminado');
   }
 
+  // ─────────────────────────────────────────────
+  // SELECCIONAR COLOR
+  // ─────────────────────────────────────────────
   void _pickColor(String label, int currentColor, Function(Color) onChanged) {
     showDialog(
       context: context,
@@ -184,6 +222,9 @@ class _CatalogStylePageState extends State<CatalogStylePage> {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // CONSTRUCCIÓN DE UI
+  // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loading) {

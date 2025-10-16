@@ -103,7 +103,7 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.history, color: Colors.blueGrey),
+                    icon: const Icon(Icons.folder_copy_outlined, color: Colors.grey),
                     tooltip: 'Ver historial',
                     onPressed: () {
                       Navigator.push(
@@ -118,7 +118,7 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.restore_outlined, color: Colors.green),
+                    icon: const Icon(Icons.remove_red_eye, color: Colors.green),
                     tooltip: 'Reactivar producto',
                     onPressed: () => _reactivateProduct(p),
                   ),
