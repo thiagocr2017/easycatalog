@@ -19,41 +19,52 @@ class EasyCatalogApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFF4B0082); // Índigo profundo
+    const accentColor = Color(0xFFFF0080);  // Rosa eléctrico
+    const cyanColor = Color(0xFF00BFFF);    // Azul eléctrico
+
     return MaterialApp(
       title: 'EasyCatalog',
       debugShowCheckedModeBanner: false,
 
-      // 🎨 Tema claro
+      // 🎨 Tema claro — elegante y tecnológico
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3A8FB7)),
+        brightness: Brightness.light,
+        colorScheme: const ColorScheme.light(
+          primary: primaryColor,
+          secondary: cyanColor,
+          surface: Color(0xFFF4F4F4),
+        ),
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF9F9FB),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
           titleTextStyle: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 20,
             color: Colors.white,
           ),
-          backgroundColor: Color(0xFF3A8FB7),
-          foregroundColor: Colors.white,
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFF3A8FB7),
+          backgroundColor: accentColor,
           foregroundColor: Colors.white,
         ),
       ),
 
-      // 🌙 Tema oscuro
+      // 🌙 Tema oscuro — moderno y tecnológico
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF3A8FB7),
-          brightness: Brightness.dark,
+        colorScheme: const ColorScheme.dark(
+          primary: accentColor,
+          secondary: cyanColor,
+          surface: Color(0xFF2A2A2A),
         ),
         useMaterial3: true,
         appBarTheme: const AppBarTheme(
           centerTitle: true,
-          backgroundColor: Color(0xFF1E1E1E),
+          backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           titleTextStyle: TextStyle(
             fontWeight: FontWeight.bold,
@@ -62,7 +73,7 @@ class EasyCatalogApp extends StatelessWidget {
           ),
         ),
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFF3A8FB7),
+          backgroundColor: accentColor,
           foregroundColor: Colors.white,
         ),
         cardColor: const Color(0xFF2A2A2A),

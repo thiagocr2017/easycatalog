@@ -36,6 +36,7 @@ dependencies:
   # 💡 Utilidades
   intl: ^0.19.0
   shared_preferences: ^2.3.1
+  flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:
   flutter_test:
@@ -46,6 +47,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/icons/EasyCatalogIcon-iOS-Default-1024x1024@1x.png
     - assets/fonts/
 
   fonts:
@@ -68,3 +70,16 @@ flutter:
         - asset: assets/fonts/OpenSans-Regular.ttf
         - asset: assets/fonts/OpenSans-SemiBold.ttf
           weight: 600
+flutter_launcher_icons:
+  android: false
+  ios: false
+
+  macos:
+    generate: true
+    image_path: "assets/icons/EasyCatalogIcon-iOS-Default-1024x1024@1x.png"
+    background_color: "#FFFFFF"
+
+  image_path: "assets/icons/EasyCatalogIcon-iOS-Default-1024x1024@1x.png"
+  remove_alpha_ios: true
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/EasyCatalogIcon-iOS-Default-1024x1024@1x.png"
