@@ -194,12 +194,12 @@ class _SectionsPageState extends State<SectionsPage> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.edit_outlined),
-                              tooltip: 'Editar sección',
+                              //tooltip: 'Editar sección',
                               onPressed: () => _editSection(section),
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline),
-                              tooltip: 'Eliminar sección',
+                              //tooltip: 'Eliminar sección',
                               onPressed: () => _confirmDeleteSection(section),
                             ),
                           ],

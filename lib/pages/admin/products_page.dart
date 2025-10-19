@@ -17,7 +17,7 @@ class _ProductsPageState extends State<ProductsPage> {
   final _db = DatabaseHelper.instance;
   List<Product> _products = [];
   List<Section> _sections = [];
-  Map<int, String> _sectionNames = {};
+  //Map<int, String> _sectionNames = {};
   String _searchQuery = '';
 
   @override
@@ -34,18 +34,19 @@ class _ProductsPageState extends State<ProductsPage> {
     final sectionData = await _db.getSections();
     final productData = await _db.getProducts();
 
-    final sections = sectionData.map((e) => Section.fromMap(e)).toList();
+    final sections = sectionData.map((e) => Section.fromMap(e)).toList()
+      ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
     final products = productData.map((e) => Product.fromMap(e)).toList();
 
-    final sectionNames = {
+    /*final sectionNames = {
       for (final s in sections) if (s.id != null) s.id!: s.name
-    };
+    };*/
 
     if (!mounted) return;
     setState(() {
       _sections = sections;
       _products = products..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      _sectionNames = sectionNames;
+      //_sectionNames = sectionNames;
     });
   }
 
@@ -55,7 +56,8 @@ class _ProductsPageState extends State<ProductsPage> {
   List<Product> get _filteredProducts {
     final q = _searchQuery.toLowerCase();
     return _products.where((p) {
-      return p.name.toLowerCase().contains(q) || p.description.toLowerCase().contains(q);
+      return p.name.toLowerCase().contains(q) ||
+          p.description.toLowerCase().contains(q);
     }).toList();
   }
 
@@ -64,15 +66,24 @@ class _ProductsPageState extends State<ProductsPage> {
   // ─────────────────────────────────────────────
   Future<void> _addOrEditProduct({Product? product}) async {
     final messenger = ScaffoldMessenger.of(context);
+
+    // 🔹 Recargamos secciones actualizadas y ordenadas
+    final sectionData = await _db.getSections();
+    final orderedSections = sectionData.map((e) => Section.fromMap(e)).toList()
+      ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
+    setState(() => _sections = orderedSections);
+
     final nameCtrl = TextEditingController(text: product?.name ?? '');
     final descCtrl = TextEditingController(text: product?.description ?? '');
-    final priceCtrl = TextEditingController(text: product?.price.toString() ?? '');
+    final priceCtrl =
+    TextEditingController(text: product?.price.toString() ?? '');
     Section? selectedSection = _sections.firstWhere(
           (s) => s.id == product?.sectionId,
       orElse: () => _sections.isNotEmpty ? _sections.first : Section(name: ''),
     );
     String? imagePath = product?.imagePath;
 
+    if (!mounted) return;
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -80,53 +91,80 @@ class _ProductsPageState extends State<ProductsPage> {
         content: SingleChildScrollView(
           child: Column(
             children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-              TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Descripción')),
-              TextField(controller: priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Precio')),
+              TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Nombre')),
+              TextField(
+                  controller: descCtrl,
+                  decoration:
+                  const InputDecoration(labelText: 'Descripción')),
+              TextField(
+                  controller: priceCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Precio')),
               const SizedBox(height: 10),
               DropdownButtonFormField<Section>(
                 initialValue: selectedSection,
-                items: _sections.map((s) => DropdownMenuItem(value: s, child: Text(s.name))).toList(),
+                items: _sections
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+                    .toList(),
                 onChanged: (val) => selectedSection = val,
                 decoration: const InputDecoration(labelText: 'Sección'),
               ),
               const SizedBox(height: 10),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: imagePath != null ? Colors.green.shade100 : Theme.of(context).primaryColor,
-                  foregroundColor: imagePath != null ? Colors.green.shade800 : Colors.white,
+                  backgroundColor: imagePath != null
+                      ? Colors.green.shade100
+                      : Theme.of(context).primaryColor,
+                  foregroundColor: imagePath != null
+                      ? Colors.green.shade800
+                      : Colors.white,
                 ),
                 onPressed: () async {
                   final picker = ImagePicker();
-                  final xfile = await picker.pickImage(source: ImageSource.gallery);
+                  final xfile =
+                  await picker.pickImage(source: ImageSource.gallery);
                   if (xfile == null) return;
 
                   String cleanName = nameCtrl.text.trim().toLowerCase();
                   if (cleanName.isEmpty) {
-                    cleanName = 'producto_${DateTime.now().millisecondsSinceEpoch}';
+                    cleanName =
+                    'producto_${DateTime.now().millisecondsSinceEpoch}';
                   }
-                  cleanName = cleanName.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+                  cleanName =
+                      cleanName.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
                   final ext = xfile.name.split('.').last;
 
                   final appDir = await getApplicationSupportDirectory();
                   final imagesDir = Directory('${appDir.path}/images');
-                  if (!await imagesDir.exists()) await imagesDir.create(recursive: true);
+                  if (!await imagesDir.exists()) {
+                    await imagesDir.create(recursive: true);
+                  }
                   final newPath = '${imagesDir.path}/$cleanName.$ext';
                   final newFile = await File(xfile.path).copy(newPath);
                   imagePath = newFile.path;
 
                   if (!context.mounted) return;
                   (context as Element).markNeedsBuild();
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Imagen guardada como "$cleanName.$ext"')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content:
+                      Text('Imagen guardada como "$cleanName.$ext"')));
                 },
-                icon: Icon(imagePath != null ? Icons.check_circle_outline : Icons.image_outlined),
-                label: Text(imagePath != null ? 'Imagen seleccionada' : 'Seleccionar imagen'),
+                icon: Icon(imagePath != null
+                    ? Icons.check_circle_outline
+                    : Icons.image_outlined),
+                label: Text(imagePath != null
+                    ? 'Imagen seleccionada'
+                    : 'Seleccionar imagen'),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
           ElevatedButton(
             onPressed: () async {
               final name = nameCtrl.text.trim();
@@ -154,7 +192,10 @@ class _ProductsPageState extends State<ProductsPage> {
 
               if (!context.mounted) return;
               Navigator.pop(context);
-              messenger.showSnackBar(SnackBar(content: Text(product == null ? 'Producto agregado' : 'Producto actualizado')));
+              messenger.showSnackBar(SnackBar(
+                  content: Text(product == null
+                      ? 'Producto agregado'
+                      : 'Producto actualizado')));
               await _loadData();
             },
             child: const Text('Guardar'),
@@ -175,10 +216,15 @@ class _ProductsPageState extends State<ProductsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(newState ? 'Marcar como agotado' : 'Reactivar producto'),
-        content: Text('¿Seguro que deseas $actionText el producto "${p.name}"?'),
+        content:
+        Text('¿Seguro que deseas $actionText el producto "${p.name}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sí, continuar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Sí, continuar')),
         ],
       ),
     );
@@ -187,19 +233,20 @@ class _ProductsPageState extends State<ProductsPage> {
 
     final updated = p.toMap();
     updated['isDepleted'] = newState ? 1 : 0;
-    updated['depletedAt'] = newState ? DateTime.now().toIso8601String() : null;
+    updated['depletedAt'] =
+    newState ? DateTime.now().toIso8601String() : null;
 
     await _db.updateProduct(updated);
     await _db.insertProductLog(p.id!, newState ? 'agotado' : 'reactivado');
     await _loadData();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Producto "${p.name}" ${newState ? 'marcado como agotado' : 'reactivado'}'),
-        backgroundColor: newState ? Colors.red.shade400 : Colors.green.shade600,
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+          'Producto "${p.name}" ${newState ? 'marcado como agotado' : 'reactivado'}'),
+      backgroundColor:
+      newState ? Colors.red.shade400 : Colors.green.shade600,
+    ));
   }
 
   // ─────────────────────────────────────────────
@@ -213,12 +260,10 @@ class _ProductsPageState extends State<ProductsPage> {
       list.insert(newIndex, item);
     });
 
-    // reasigna localmente
     for (int i = 0; i < list.length; i++) {
       list[i].sortOrder = i;
     }
 
-    // guarda asincrónicamente
     Future.microtask(() async {
       for (final p in list) {
         if (p.id != null) {
@@ -230,15 +275,17 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   // ─────────────────────────────────────────────
-  // UI PRINCIPAL
+  // UI PRINCIPAL (AGRUPADO POR SECCIÓN ORDENADA)
   // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final grouped = <String, List<Product>>{};
+    final grouped = <int?, List<Product>>{};
     for (final p in _filteredProducts) {
-      final name = _sectionNames[p.sectionId ?? -1] ?? 'Sin sección';
-      grouped.putIfAbsent(name, () => []).add(p);
+      grouped.putIfAbsent(p.sectionId, () => []).add(p);
     }
+
+    final orderedSections = _sections
+      ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Productos')),
@@ -259,83 +306,101 @@ class _ProductsPageState extends State<ProductsPage> {
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search),
                   hintText: 'Buscar producto o descripción...',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 onChanged: (value) => setState(() => _searchQuery = value),
               ),
             ),
             Expanded(
-              child: grouped.isEmpty
-                  ? const Center(child: Text('No hay productos registrados'))
+              child: orderedSections.isEmpty
+                  ? const Center(child: Text('No hay secciones definidas'))
                   : ListView(
-                children: grouped.entries.map((entry) {
-                  final sectionName = entry.key;
-                  final products = entry.value;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        color: Colors.green.shade50,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Text(
-                          '$sectionName (${products.length})',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
-                        ),
-                      ),
-                      ReorderableListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: products.length,
-                        onReorder: (oldIndex, newIndex) => _onReorder(products, oldIndex, newIndex),
-                        proxyDecorator: (child, index, animation) => Material(
-                          color: Colors.green.shade50,
-                          elevation: 4,
-                          borderRadius: BorderRadius.circular(8),
-                          child: child,
-                        ),
-                        itemBuilder: (context, i) {
-                          final p = products[i];
-                          return Card(
-                            key: ValueKey(p.id ?? p.name),
-                            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            child: ListTile(
-                              leading: p.imagePath != null && File(p.imagePath!).existsSync()
-                                  ? Image.file(File(p.imagePath!), width: 50, height: 50, fit: BoxFit.cover)
-                                  : const Icon(Icons.image_not_supported),
-                              title: Text(p.name),
-                              subtitle: Text('Precio: \$${p.price.toStringAsFixed(2)}'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: Icon(
-                                      p.isDepleted ? Icons.visibility_off : Icons.visibility,
-                                      color: p.isDepleted ? Colors.red : Colors.green,
-                                    ),
-                                    tooltip: p.isDepleted
-                                        ? 'Marcar como disponible'
-                                        : 'Marcar como agotado',
-                                    onPressed: () => _toggleDepleted(p),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () => _addOrEditProduct(product: p),
-                                  ),
-                                  const Icon(Icons.drag_handle, color: Colors.grey),
-                                ],
+                children: [
+                  for (final s in orderedSections)
+                    if (grouped[s.id]?.isNotEmpty ?? false)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            color: Colors.green.shade50,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            child: Text(
+                              '${s.name} (${grouped[s.id]!.length})',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
                               ),
                             ),
-                          );
-                        },
+                          ),
+                          ReorderableListView.builder(
+                            shrinkWrap: true,
+                            physics:
+                            const NeverScrollableScrollPhysics(),
+                            itemCount: grouped[s.id]!.length,
+                            onReorder: (oldIndex, newIndex) =>
+                                _onReorder(grouped[s.id]!,
+                                    oldIndex, newIndex),
+                            itemBuilder: (context, i) {
+                              final p = grouped[s.id]![i];
+                              return Card(
+                                key: ValueKey(p.id ?? p.name),
+                                margin: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                child: ListTile(
+                                  leading: p.imagePath != null &&
+                                      File(p.imagePath!)
+                                          .existsSync()
+                                      ? Image.file(
+                                    File(p.imagePath!),
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                  )
+                                      : const Icon(Icons
+                                      .image_not_supported),
+                                  title: Text(p.name),
+                                  subtitle: Text(
+                                      'Precio: \$${p.price.toStringAsFixed(2)}'),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(
+                                          p.isDepleted
+                                              ? Icons.visibility_off
+                                              : Icons.visibility,
+                                          color: p.isDepleted
+                                              ? Colors.red
+                                              : Colors.green,
+                                        ),
+                                        /*tooltip: p.isDepleted
+                                            ? 'Marcar como disponible'
+                                            : 'Marcar como agotado',*/
+                                        onPressed: () =>
+                                            _toggleDepleted(p),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.edit),
+                                        onPressed: () =>
+                                            _addOrEditProduct(
+                                                product: p),
+                                      ),
+                                      const Icon(Icons.drag_handle,
+                                          color: Colors.grey),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
-                    ],
-                  );
-                }).toList(),
+                ],
               ),
             ),
           ],

@@ -169,6 +169,7 @@ class DatabaseHelper {
     return await db.query(tableSections, orderBy: 'sortOrder ASC');
   }
 
+
   Future<int> updateSection(Map<String, dynamic> row) async {
     final db = await database;
     return await db.update(
