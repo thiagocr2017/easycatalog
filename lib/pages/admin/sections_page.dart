@@ -21,9 +21,6 @@ class _SectionsPageState extends State<SectionsPage> {
     _loadSections();
   }
 
-  // ─────────────────────────────────────────────
-  // CARGAR SECCIONES
-  // ─────────────────────────────────────────────
   Future<void> _loadSections() async {
     final data = await _db.getSections();
     if (!mounted) return;
@@ -34,22 +31,22 @@ class _SectionsPageState extends State<SectionsPage> {
     });
   }
 
-  // ─────────────────────────────────────────────
-  // GUARDAR ORDEN Y MOSTRAR FEEDBACK
-  // ─────────────────────────────────────────────
   Future<void> _saveNewOrder() async {
     for (int i = 0; i < _sections.length; i++) {
       final s = _sections[i];
-      await _db.updateSection({'id': s.id, 'name': s.name, 'sortOrder': i});
+      if (s.id != null) {
+        await _db.updateSection({
+          'id': s.id,
+          'name': s.name,
+          'sortOrder': i,
+        });
+      }
     }
     if (!mounted) return;
     setState(() => _hasUnsavedChanges = false);
     _safeSnack('Orden guardada correctamente');
   }
 
-  // ─────────────────────────────────────────────
-  // AGREGAR SECCIÓN
-  // ─────────────────────────────────────────────
   Future<void> _addSection() async {
     final name = _controller.text.trim();
     if (name.isEmpty) return;
@@ -59,12 +56,9 @@ class _SectionsPageState extends State<SectionsPage> {
 
     if (!mounted) return;
     _safeSnack('Sección "$name" agregada');
-    _loadSections();
+    await _loadSections(); // 🔁 recarga para que tenga ID real
   }
 
-  // ─────────────────────────────────────────────
-  // EDITAR SECCIÓN
-  // ─────────────────────────────────────────────
   Future<void> _editSection(Section section) async {
     final controller = TextEditingController(text: section.name);
     final newName = await showDialog<String>(
@@ -93,13 +87,10 @@ class _SectionsPageState extends State<SectionsPage> {
       });
       if (!mounted) return;
       _safeSnack('Sección actualizada a "$newName"');
-      _loadSections();
+      await _loadSections();
     }
   }
 
-  // ─────────────────────────────────────────────
-  // ELIMINAR SECCIÓN
-  // ─────────────────────────────────────────────
   Future<void> _confirmDeleteSection(Section section) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -116,17 +107,14 @@ class _SectionsPageState extends State<SectionsPage> {
       ),
     );
 
-    if (confirm == true) {
+    if (confirm == true && section.id != null) {
       await _db.deleteSection(section.id!);
       if (!mounted) return;
       _safeSnack('Sección "${section.name}" eliminada');
-      _loadSections();
+      await _loadSections();
     }
   }
 
-  // ─────────────────────────────────────────────
-  // CONFIRMAR SALIDA SIN GUARDAR
-  // ─────────────────────────────────────────────
   Future<bool> _onWillPop() async {
     if (_hasUnsavedChanges) {
       final confirm = await showDialog<bool>(
@@ -147,18 +135,12 @@ class _SectionsPageState extends State<SectionsPage> {
     return true;
   }
 
-  // ─────────────────────────────────────────────
-  // SNACKBAR SEGURO
-  // ─────────────────────────────────────────────
   void _safeSnack(String message) {
     if (mounted && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
-  // ─────────────────────────────────────────────
-  // UI PRINCIPAL
-  // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -169,7 +151,6 @@ class _SectionsPageState extends State<SectionsPage> {
         if (confirm && context.mounted) {
           Navigator.pop(context);
         }
-
       },
       child: Scaffold(
         appBar: AppBar(
@@ -178,7 +159,7 @@ class _SectionsPageState extends State<SectionsPage> {
             IconButton(
               icon: const Icon(Icons.save_outlined),
               tooltip: 'Guardar orden',
-              onPressed: _saveNewOrder,
+              onPressed: _hasUnsavedChanges ? _saveNewOrder : null,
             ),
           ],
         ),
@@ -204,18 +185,43 @@ class _SectionsPageState extends State<SectionsPage> {
               const SizedBox(height: 16),
               Expanded(
                 child: ReorderableListView(
-                  onReorder: (oldIndex, newIndex) {
+                  onReorder: (oldIndex, newIndex) async {
                     setState(() {
                       if (newIndex > oldIndex) newIndex -= 1;
                       final item = _sections.removeAt(oldIndex);
                       _sections.insert(newIndex, item);
                       _hasUnsavedChanges = true;
                     });
+
+                    // ✅ actualizar sortOrder dinámicamente
+                    for (int i = 0; i < _sections.length; i++) {
+                      _sections[i].sortOrder = i;
+                    }
+
+                    // ✅ guardar automáticamente sin crash
+                    Future.microtask(() async {
+                      for (final s in _sections) {
+                        if (s.id != null) {
+                          await _db.updateSection({
+                            'id': s.id,
+                            'name': s.name,
+                            'sortOrder': s.sortOrder ?? 0,
+                          });
+                        }
+                      }
+                      await _loadSections();
+                    });
                   },
+                  proxyDecorator: (child, index, animation) => Material(
+                    color: Colors.green.shade50,
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(8),
+                    child: child,
+                  ),
                   children: [
                     for (final section in _sections)
                       Card(
-                        key: ValueKey(section.id),
+                        key: ValueKey(section.id ?? section.name),
                         child: ListTile(
                           title: Text(section.name),
                           leading: const Icon(Icons.drag_handle),

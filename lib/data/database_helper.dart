@@ -16,10 +16,11 @@ class DatabaseHelper {
 
   static Database? _database;
 
-  // Getter principal de base de datos
+  // Getter principal
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
+    await ensureProductSortOrderColumn(); // ✅ crea sortOrder si falta
     return _database!;
   }
 
@@ -27,18 +28,13 @@ class DatabaseHelper {
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, _databaseName);
-    return await openDatabase(
-      path,
-      version: _databaseVersion,
-      onCreate: _onCreate,
-    );
+    return await openDatabase(path, version: _databaseVersion, onCreate: _onCreate);
   }
 
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
   // CREACIÓN DE TODAS LAS TABLAS
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
   Future<void> _onCreate(Database db, int version) async {
-    // Tabla de secciones
     await db.execute('''
       CREATE TABLE $tableSections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +43,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // Tabla de productos
     await db.execute('''
       CREATE TABLE $tableProducts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,11 +54,11 @@ class DatabaseHelper {
         isDepleted INTEGER DEFAULT 0,
         createdAt TEXT,
         depletedAt TEXT,
+        sortOrder INTEGER DEFAULT 0,
         FOREIGN KEY (sectionId) REFERENCES $tableSections(id) ON DELETE SET NULL
       )
     ''');
 
-    // Tabla de configuraciones
     await db.execute('''
       CREATE TABLE $tableSettings (
         key TEXT PRIMARY KEY,
@@ -71,7 +66,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // Tabla de logs de productos agotados/reactivados
     await db.execute('''
       CREATE TABLE $tableProductLogs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +76,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // Tabla de métodos de pago
     await db.execute('''
       CREATE TABLE $tablePaymentMethods (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -94,16 +87,23 @@ class DatabaseHelper {
     ''');
   }
 
-  // ─────────────────────────────────────────────
-  // CONFIGURACIONES (SETTINGS)
-  // ─────────────────────────────────────────────
+  // ✅ Verifica si existe sortOrder y lo agrega si falta
+  Future<void> ensureProductSortOrderColumn() async {
+    final db = await _initDatabase();
+    final res = await db.rawQuery('PRAGMA table_info($tableProducts)');
+    final hasSortOrder = res.any((col) => col['name'] == 'sortOrder');
+    if (!hasSortOrder) {
+      await db.execute('ALTER TABLE $tableProducts ADD COLUMN sortOrder INTEGER DEFAULT 0');
+    }
+  }
+
+  // ───────────────────────────────
+  // CONFIGURACIONES
+  // ───────────────────────────────
   Future<void> setSetting(String key, String value) async {
     final db = await database;
-    await db.insert(
-      tableSettings,
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert(tableSettings, {'key': key, 'value': value},
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<String?> getSetting(String key) async {
@@ -113,9 +113,9 @@ class DatabaseHelper {
     return null;
   }
 
-  // ─────────────────────────────────────────────
-  // VENDEDORES MÚLTIPLES
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
+  // VENDEDORES
+  // ───────────────────────────────
   Future<void> setSellerSetting(int sellerId, String key, String value) async {
     final db = await database;
     await db.insert(
@@ -156,9 +156,9 @@ class DatabaseHelper {
     return ids.toList()..sort();
   }
 
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
   // SECCIONES
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
   Future<int> insertSection(Map<String, dynamic> row) async {
     final db = await database;
     return await db.insert(tableSections, row);
@@ -184,9 +184,9 @@ class DatabaseHelper {
     return await db.delete(tableSections, where: 'id = ?', whereArgs: [id]);
   }
 
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
   // PRODUCTOS
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
   Future<int> insertProduct(Map<String, dynamic> row) async {
     final db = await database;
     return await db.insert(tableProducts, row);
@@ -194,7 +194,7 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getProducts() async {
     final db = await database;
-    return await db.query(tableProducts);
+    return await db.query(tableProducts, orderBy: 'sectionId ASC, sortOrder ASC');
   }
 
   Future<int> updateProduct(Map<String, dynamic> row) async {
@@ -212,9 +212,9 @@ class DatabaseHelper {
     return await db.delete(tableProducts, where: 'id = ?', whereArgs: [id]);
   }
 
-  // ─────────────────────────────────────────────
-  // LOGS DE PRODUCTOS AGOTADOS / REACTIVADOS
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
+  // LOGS PRODUCTOS
+  // ───────────────────────────────
   Future<void> insertProductLog(int productId, String action) async {
     final db = await database;
     await db.insert(
@@ -237,9 +237,9 @@ class DatabaseHelper {
     );
   }
 
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
   // MÉTODOS DE PAGO
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
   Future<int> insertPaymentMethod(Map<String, dynamic> row) async {
     final db = await database;
     return await db.insert(tablePaymentMethods, row);
@@ -247,12 +247,7 @@ class DatabaseHelper {
 
   Future<int> updatePaymentMethod(Map<String, dynamic> row) async {
     final db = await database;
-    return await db.update(
-      tablePaymentMethods,
-      row,
-      where: 'id = ?',
-      whereArgs: [row['id']],
-    );
+    return await db.update(tablePaymentMethods, row, where: 'id = ?', whereArgs: [row['id']]);
   }
 
   Future<int> deletePaymentMethod(int id) async {
@@ -265,9 +260,9 @@ class DatabaseHelper {
     return await db.query(tablePaymentMethods);
   }
 
-  // ─────────────────────────────────────────────
-  // LIMPIAR TODA LA BASE DE DATOS (REINICIO)
-  // ─────────────────────────────────────────────
+  // ───────────────────────────────
+  // REINICIO COMPLETO
+  // ───────────────────────────────
   Future<void> clearDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, _databaseName);

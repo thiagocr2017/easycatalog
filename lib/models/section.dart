@@ -1,9 +1,13 @@
 class Section {
   final int? id;
   final String name;
-  final int? sortOrder;
+  int? sortOrder; // ✅ ya no es final → permite reordenar dinámicamente
 
-  Section({this.id, required this.name, this.sortOrder});
+  Section({
+    this.id,
+    required this.name,
+    this.sortOrder,
+  });
 
   Map<String, dynamic> toMap() => {
     'id': id,

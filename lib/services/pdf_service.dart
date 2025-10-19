@@ -96,9 +96,16 @@ class PdfService {
       final products = allProducts
           .where((p) => p.sectionId == section.id && !p.isDepleted)
           .toList()
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        ..sort((a, b) {
+          final sa = a.sortOrder;
+          final sb = b.sortOrder;
+          if (sa != sb) return sa.compareTo(sb);
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+
 
       if (products.isEmpty) continue;
+
 
       doc.addPage(_buildSectionPage(section, style, montserrat));
       for (var i = 0; i < products.length; i += 2) {
