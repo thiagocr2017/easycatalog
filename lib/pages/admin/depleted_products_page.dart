@@ -77,6 +77,57 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
     );
   }
 
+  /// ✅ Nueva función: confirma y elimina producto + imagen
+  Future<void> _confirmAndDeleteProduct(Product p) async {
+    // ⚡ Diálogo de confirmación
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar producto'),
+        content: Text(
+          '¿Seguro que deseas eliminar "${p.name}"?\n'
+              'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // 🗑️ 1️⃣ Borra imagen local (si existe)
+    if (p.imagePath != null && File(p.imagePath!).existsSync()) {
+      try {
+        await File(p.imagePath!).delete();
+      } catch (e) {
+        debugPrint('⚠️ No se pudo eliminar la imagen: $e');
+      }
+    }
+
+    // 🧹 2️⃣ Borra el producto y dependencias
+    await _db.deleteProductCascade(p.id!);
+
+    if (!mounted) return;
+    setState(() => _depleted.remove(p));
+
+    // ✅ 3️⃣ Muestra confirmación segura
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Producto "${p.name}" eliminado completamente'),
+        backgroundColor: Colors.red.shade400,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,6 +172,11 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
                     icon: const Icon(Icons.remove_red_eye, color: Colors.green),
                     tooltip: 'Reactivar producto',
                     onPressed: () => _reactivateProduct(p),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_forever, color: Colors.red),
+                    tooltip: 'Eliminar permanentemente',
+                    onPressed: () => _confirmAndDeleteProduct(p),
                   ),
                 ],
               ),

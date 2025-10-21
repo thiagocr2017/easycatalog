@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../data/database_helper.dart';
 import '../../models/product.dart';
+import '../../models/product_image_setting.dart';
 import '../../models/section.dart';
 
 class ProductsPage extends StatefulWidget {
@@ -66,144 +67,242 @@ class _ProductsPageState extends State<ProductsPage> {
   // ─────────────────────────────────────────────
   Future<void> _addOrEditProduct({Product? product}) async {
     final messenger = ScaffoldMessenger.of(context);
-
-    // 🔹 Recargamos secciones actualizadas y ordenadas
-    final sectionData = await _db.getSections();
-    final orderedSections = sectionData.map((e) => Section.fromMap(e)).toList()
-      ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
-    setState(() => _sections = orderedSections);
+    final parentContext = context;
 
     final nameCtrl = TextEditingController(text: product?.name ?? '');
     final descCtrl = TextEditingController(text: product?.description ?? '');
-    final priceCtrl =
-    TextEditingController(text: product?.price.toString() ?? '');
+    final priceCtrl = TextEditingController(text: product?.price.toString() ?? '');
     Section? selectedSection = _sections.firstWhere(
           (s) => s.id == product?.sectionId,
       orElse: () => _sections.isNotEmpty ? _sections.first : Section(name: ''),
     );
     String? imagePath = product?.imagePath;
 
-    if (!mounted) return;
+    // 🔹 Variables de encuadre
+    double zoom = 1.0;
+    double offsetX = 0.0;
+    double offsetY = 0.0;
+
+    // 🔹 Si el producto ya existe, carga la configuración previa
+    if (product?.id != null) {
+      final conf = await _db.getImageSetting(product!.id!);
+      if (conf != null) {
+        zoom = conf.zoom;
+        offsetX = conf.offsetX;
+        offsetY = conf.offsetY;
+      }
+    }
+
+    if (!parentContext.mounted) return;
+
     await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(product == null ? 'Nuevo producto' : 'Editar producto'),
-        content: SingleChildScrollView(
-          child: Column(
-            children: [
-              TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Nombre')),
-              TextField(
-                  controller: descCtrl,
-                  decoration:
-                  const InputDecoration(labelText: 'Descripción')),
-              TextField(
+      context: parentContext,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(product == null ? 'Nuevo producto' : 'Editar producto'),
+          content: SingleChildScrollView(
+            child: Column(
+              children: [
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
+                TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Descripción')),
+                TextField(
                   controller: priceCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Precio')),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<Section>(
-                initialValue: selectedSection,
-                items: _sections
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
-                    .toList(),
-                onChanged: (val) => selectedSection = val,
-                decoration: const InputDecoration(labelText: 'Sección'),
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: imagePath != null
-                      ? Colors.green.shade100
-                      : Theme.of(context).primaryColor,
-                  foregroundColor: imagePath != null
-                      ? Colors.green.shade800
-                      : Colors.white,
+                  decoration: const InputDecoration(labelText: 'Precio'),
                 ),
-                onPressed: () async {
-                  final picker = ImagePicker();
-                  final xfile =
-                  await picker.pickImage(source: ImageSource.gallery);
-                  if (xfile == null) return;
+                const SizedBox(height: 10),
+                DropdownButtonFormField<Section>(
+                  initialValue: selectedSection,
+                  items: _sections
+                      .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+                      .toList(),
+                  onChanged: (val) => selectedSection = val,
+                  decoration: const InputDecoration(labelText: 'Sección'),
+                ),
+                const SizedBox(height: 10),
 
-                  String cleanName = nameCtrl.text.trim().toLowerCase();
-                  if (cleanName.isEmpty) {
+                // 📸 Botón de selección de imagen
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: imagePath != null
+                        ? Colors.green.shade100
+                        : Theme.of(context).primaryColor,
+                    foregroundColor:
+                    imagePath != null ? Colors.green.shade800 : Colors.white,
+                  ),
+                  onPressed: () async {
+                    final picker = ImagePicker();
+                    final xfile =
+                    await picker.pickImage(source: ImageSource.gallery);
+                    if (xfile == null) return;
+
+                    String cleanName = nameCtrl.text.trim().toLowerCase();
+                    if (cleanName.isEmpty) {
+                      cleanName =
+                      'producto_${DateTime.now().millisecondsSinceEpoch}';
+                    }
                     cleanName =
-                    'producto_${DateTime.now().millisecondsSinceEpoch}';
-                  }
-                  cleanName =
-                      cleanName.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-                  final ext = xfile.name.split('.').last;
+                        cleanName.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+                    final ext = xfile.name.split('.').last;
 
-                  final appDir = await getApplicationSupportDirectory();
-                  final imagesDir = Directory('${appDir.path}/images');
-                  if (!await imagesDir.exists()) {
-                    await imagesDir.create(recursive: true);
-                  }
-                  final newPath = '${imagesDir.path}/$cleanName.$ext';
-                  final newFile = await File(xfile.path).copy(newPath);
-                  imagePath = newFile.path;
+                    final appDir = await getApplicationSupportDirectory();
+                    final imagesDir = Directory('${appDir.path}/images');
+                    if (!await imagesDir.exists()) {
+                      await imagesDir.create(recursive: true);
+                    }
 
-                  if (!context.mounted) return;
-                  (context as Element).markNeedsBuild();
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content:
-                      Text('Imagen guardada como "$cleanName.$ext"')));
-                },
-                icon: Icon(imagePath != null
-                    ? Icons.check_circle_outline
-                    : Icons.image_outlined),
-                label: Text(imagePath != null
-                    ? 'Imagen seleccionada'
-                    : 'Seleccionar imagen'),
-              ),
-            ],
+                    final newPath = '${imagesDir.path}/$cleanName.$ext';
+                    final newFile = await File(xfile.path).copy(newPath);
+                    setState(() => imagePath = newFile.path);
+
+                    // ✅ SnackBar seguro (sin use_build_context_synchronously)
+                    if (context.mounted) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text(
+                                    'Imagen guardada como "$cleanName.$ext"')),
+                          );
+                        }
+                      });
+                    }
+                  },
+                  icon: Icon(imagePath != null
+                      ? Icons.check_circle_outline
+                      : Icons.image_outlined),
+                  label: Text(imagePath != null
+                      ? 'Imagen seleccionada'
+                      : 'Seleccionar imagen'),
+                ),
+
+                // 🧩 Herramientas de edición (solo si hay imagen)
+                if (imagePath != null && File(imagePath!).existsSync()) ...[
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 180, // igual que en PDF
+                      height: 260,
+                      color: Colors.grey.shade200,
+                      child: Transform.translate(
+                        offset: Offset(offsetX * 35, offsetY * 35),
+                        child: Transform.scale(
+                          scale: zoom,
+                          child:
+                          Image.file(File(imagePath!), fit: BoxFit.cover),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Ajustar imagen para PDF',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  Slider(
+                    value: zoom,
+                    min: 0.2,
+                    max: 5.0,
+                    divisions: 100,
+                    label: 'Zoom: ${zoom.toStringAsFixed(2)}x',
+                    onChanged: (v) => setState(() => zoom = v),
+                  ),
+                  Row(
+                    children: [
+                      const Text('Desplazamiento X'),
+                      Expanded(
+                        child: Slider(
+                          value: offsetX,
+                          min: -10.0,
+                          max: 10.0,
+                          divisions: 100,
+                          onChanged: (v) => setState(() => offsetX = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      const Text('Desplazamiento Y'),
+                      Expanded(
+                        child: Slider(
+                          value: offsetY,
+                          min: -10.0,
+                          max: 10.0,
+                          divisions: 100,
+                          onChanged: (v) => setState(() => offsetY = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar')),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              final desc = descCtrl.text.trim();
-              final price = double.tryParse(priceCtrl.text) ?? 0;
-              final sectionId = selectedSection?.id;
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                final desc = descCtrl.text.trim();
+                final price = double.tryParse(priceCtrl.text) ?? 0;
+                final sectionId = selectedSection?.id;
+                if (name.isEmpty || sectionId == null) return;
 
-              if (name.isEmpty || sectionId == null) return;
+                final data = Product(
+                  id: product?.id,
+                  name: name,
+                  description: desc,
+                  price: price,
+                  sectionId: sectionId,
+                  imagePath: imagePath,
+                  sortOrder: product?.sortOrder ?? _products.length,
+                ).toMap();
 
-              final data = Product(
-                id: product?.id,
-                name: name,
-                description: desc,
-                price: price,
-                sectionId: sectionId,
-                imagePath: imagePath,
-                sortOrder: product?.sortOrder ?? _products.length,
-              ).toMap();
+                int productId;
+                if (product == null) {
+                  // 🆕 Nuevo producto
+                  productId = await _db.insertProduct(data);
+                } else {
+                  // ✏️ Producto existente
+                  await _db.updateProduct(data);
+                  productId = product.id!;
+                }
 
-              if (product == null) {
-                await _db.insertProduct(data);
-              } else {
-                await _db.updateProduct(data);
-              }
+                // 💾 Guardar zoom y encuadre en la tabla product_image_settings
+                await _db.upsertImageSetting(ProductImageSetting(
+                  productId: productId,
+                  zoom: zoom,
+                  offsetX: offsetX,
+                  offsetY: offsetY,
+                ));
 
-              if (!context.mounted) return;
-              Navigator.pop(context);
-              messenger.showSnackBar(SnackBar(
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+
+                messenger.showSnackBar(SnackBar(
                   content: Text(product == null
-                      ? 'Producto agregado'
-                      : 'Producto actualizado')));
-              await _loadData();
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
+                      ? 'Producto agregado correctamente'
+                      : 'Producto actualizado correctamente'),
+                ));
+
+                await _loadData();
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
       ),
     );
   }
+
 
   // ─────────────────────────────────────────────
   // CAMBIAR ESTADO (AGOTAR / REACTIVAR)
@@ -323,6 +422,7 @@ class _ProductsPageState extends State<ProductsPage> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Header de sección
                           Container(
                             width: double.infinity,
                             color: Colors.green.shade50,
@@ -350,19 +450,41 @@ class _ProductsPageState extends State<ProductsPage> {
                               return Card(
                                 key: ValueKey(p.id ?? p.name),
                                 margin: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
+                                    horizontal: 9, vertical: 13),
                                 child: ListTile(
-                                  leading: p.imagePath != null &&
-                                      File(p.imagePath!)
-                                          .existsSync()
-                                      ? Image.file(
-                                    File(p.imagePath!),
-                                    width: 50,
-                                    height: 50,
-                                    fit: BoxFit.cover,
-                                  )
-                                      : const Icon(Icons
-                                      .image_not_supported),
+
+                                  leading: FutureBuilder<ProductImageSetting?>(
+                                    future: _db.getImageSetting(p.id!),
+                                    builder: (context, snapshot) {
+                                      final conf = snapshot.data;
+                                      final zoom = conf?.zoom ?? 1.0;
+                                      final offsetX = conf?.offsetX ?? 0.0;
+                                      final offsetY = conf?.offsetY ?? 0.0;
+
+                                      if (p.imagePath == null || !File(p.imagePath!).existsSync()) {
+                                        return const Icon(Icons.image_not_supported);
+                                      }
+
+                                      return ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Container(
+                                          width: 50,
+                                          height: 50,
+                                          color: Colors.grey.shade100,
+                                          child: Transform.translate(
+                                            offset: Offset(offsetX * 15, offsetY * 15), // 🔹 más sutil
+                                            child: Transform.scale(
+                                              scale: zoom,
+                                              child: Image.file(
+                                                File(p.imagePath!),
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                   title: Text(p.name),
                                   subtitle: Text(
                                       'Precio: \$${p.price.toStringAsFixed(2)}'),
@@ -378,9 +500,6 @@ class _ProductsPageState extends State<ProductsPage> {
                                               ? Colors.red
                                               : Colors.green,
                                         ),
-                                        /*tooltip: p.isDepleted
-                                            ? 'Marcar como disponible'
-                                            : 'Marcar como agotado',*/
                                         onPressed: () =>
                                             _toggleDepleted(p),
                                       ),

@@ -86,7 +86,8 @@ class PdfService {
       ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
 
     // Portada
-    doc.addPage(_buildCoverPage(style, seller, payments, montserrat, playlist, bukhari));
+    doc.addPage(
+        _buildCoverPage(style, seller, payments, montserrat, playlist, bukhari));
 
     // Secciones + productos
     final allProducts =
@@ -103,14 +104,26 @@ class PdfService {
           return a.name.toLowerCase().compareTo(b.name.toLowerCase());
         });
 
-
       if (products.isEmpty) continue;
 
-
       doc.addPage(_buildSectionPage(section, style, montserrat));
+
       for (var i = 0; i < products.length; i += 2) {
         final slice = products.sublist(i, (i + 2).clamp(0, products.length));
-        doc.addPage(_buildProductsPage(slice, style, montserrat, openSans));
+
+        // 🔹 Cargar configuraciones de zoom y encuadre antes de generar la página
+        final imageSettings = <int, Map<String, double>>{};
+        for (final prod in slice) {
+          final conf = await _db.getImageSetting(prod.id ?? -1);
+          imageSettings[prod.id ?? -1] = {
+            'zoom': conf?.zoom ?? 1.0,
+            'offsetX': conf?.offsetX ?? 0.0,
+            'offsetY': conf?.offsetY ?? 0.0,
+          };
+        }
+
+        doc.addPage(
+            _buildProductsPage(slice, style, montserrat, openSans, imageSettings));
       }
     }
 
@@ -120,9 +133,6 @@ class PdfService {
   // ─────────────────────────────────────────────
   // Portada del catálogo
   // ─────────────────────────────────────────────
-  // ─────────────────────────────────────────────
-// Portada del catálogo (versión corregida sin bordes blancos)
-// ─────────────────────────────────────────────
   pw.Page _buildCoverPage(
       StyleSettings s,
       SellerSettings seller,
@@ -143,14 +153,13 @@ class PdfService {
       build: (context) => pw.Container(
         width: double.infinity,
         height: double.infinity,
-        color: _colorFromInt(s.backgroundColor), // ✅ Fondo completo
+        color: _colorFromInt(s.backgroundColor),
         child: pw.Padding(
-          padding: const pw.EdgeInsets.all(32), // ✅ Solo afecta al contenido
+          padding: const pw.EdgeInsets.all(32),
           child: pw.Column(
             mainAxisAlignment: pw.MainAxisAlignment.center,
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              // 🔹 Logo o título
               if (s.logoPath != null && File(s.logoPath!).existsSync())
                 pw.Image(
                   pw.MemoryImage(File(s.logoPath!).readAsBytesSync()),
@@ -165,10 +174,7 @@ class PdfService {
                     color: _colorFromInt(s.textColor),
                   ),
                 ),
-
               pw.SizedBox(height: 24),
-
-              // 🔹 Datos del vendedor
               pw.Text(
                 seller.name,
                 style: pw.TextStyle(
@@ -186,15 +192,9 @@ class PdfService {
                   color: _colorFromInt(s.textColor),
                 ),
               ),
-
               pw.SizedBox(height: 24),
-
-              // 🔹 Código QR de contacto
               pw.SvgImage(svg: svgData),
-
               pw.SizedBox(height: 40),
-
-              // 🔹 Métodos de pago
               if (payments.isNotEmpty)
                 pw.Column(
                   children: [
@@ -214,18 +214,15 @@ class PdfService {
                       final info = (pm['info'] ?? '').toString();
                       final beneficiary =
                       (pm['beneficiary'] ?? '').toString();
-
                       return pw.Padding(
                         padding:
                         const pw.EdgeInsets.symmetric(vertical: 4),
                         child: pw.Row(
-                          mainAxisAlignment:
-                          pw.MainAxisAlignment.center,
+                          mainAxisAlignment: pw.MainAxisAlignment.center,
                           children: [
                             if (logo != null && File(logo).existsSync())
                               pw.Image(
-                                pw.MemoryImage(
-                                    File(logo).readAsBytesSync()),
+                                pw.MemoryImage(File(logo).readAsBytesSync()),
                                 height: 40,
                               ),
                             pw.SizedBox(width: 8),
@@ -233,28 +230,17 @@ class PdfService {
                               crossAxisAlignment:
                               pw.CrossAxisAlignment.start,
                               children: [
-                                pw.Text(
-                                  name,
-                                  style: pw.TextStyle(
-                                    font: montserrat,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                pw.Text(
-                                  info,
-                                  style: pw.TextStyle(
-                                    font: montserrat,
-                                    fontSize: 10,
-                                  ),
-                                ),
+                                pw.Text(name,
+                                    style: pw.TextStyle(font: montserrat, fontSize: 12)),
+                                pw.Text(info,
+                                    style: pw.TextStyle(font: montserrat, fontSize: 10)),
                                 pw.Text(
                                   beneficiary,
                                   style: pw.TextStyle(
                                     font: montserrat,
                                     fontSize: 10,
                                     fontWeight: pw.FontWeight.bold,
-                                    color: _colorFromInt(
-                                        s.highlightColor),
+                                    color: _colorFromInt(s.highlightColor),
                                   ),
                                 ),
                               ],
@@ -272,140 +258,86 @@ class PdfService {
     );
   }
 
-/*  pw.Page _buildCoverPage(
-      StyleSettings s,
-      SellerSettings seller,
-      List<Map<String, dynamic>> payments,
-      pw.Font montserrat,
-      pw.Font playlist,
-      pw.Font bukhari,
-      ) {
-    final qr = Barcode.qrCode();
-    final cleanedPhone = seller.phone.replaceAll(RegExp(r'[^0-9]'), '');
-    final encodedMsg = Uri.encodeComponent(seller.message);
-    final waLink = 'https://wa.me/$cleanedPhone?text=$encodedMsg';
-    final svgData = qr.toSvg(waLink, width: 80, height: 80);
-
-    return pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      margin: pw.EdgeInsets.zero,
-      build: (context) => pw.Container(
-        color: _colorFromInt(s.backgroundColor),
-        padding: const pw.EdgeInsets.all(32),
-        child: pw.Column(
-          mainAxisAlignment: pw.MainAxisAlignment.center,
-          crossAxisAlignment: pw.CrossAxisAlignment.center,
-          children: [
-            if (s.logoPath != null && File(s.logoPath!).existsSync())
-              pw.Image(pw.MemoryImage(File(s.logoPath!).readAsBytesSync()), height: 160)
-            else
-              pw.Text(
-                'HyJ Souvenir Bisutería',
-                style: pw.TextStyle(font: bukhari, fontSize: 36, color: _colorFromInt(s.textColor)),
-              ),
-            pw.SizedBox(height: 24),
-            pw.Text(seller.name, style: pw.TextStyle(font: montserrat, fontSize: 18, color: _colorFromInt(s.textColor))),
-            pw.SizedBox(height: 4),
-            pw.Text(seller.phone, style: pw.TextStyle(font: montserrat, fontSize: 14, color: _colorFromInt(s.textColor))),
-            pw.SizedBox(height: 24),
-            pw.SvgImage(svg: svgData),
-            pw.SizedBox(height: 40),
-            if (payments.isNotEmpty)
-              pw.Column(
-                children: [
-                  pw.Text('Métodos de Pago',
-                      style: pw.TextStyle(
-                          font: montserrat,
-                          fontWeight: pw.FontWeight.bold,
-                          fontSize: 16,
-                          color: _colorFromInt(s.highlightColor))),
-                  pw.SizedBox(height: 12),
-                  ...payments.map((pm) {
-                    final logo = pm['logoPath'] as String?;
-                    final name = (pm['name'] ?? '').toString();
-                    final info = (pm['info'] ?? '').toString();
-                    final beneficiary = (pm['beneficiary'] ?? '').toString();
-
-                    return pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(vertical: 4),
-                      child: pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.center,
-                        children: [
-                          if (logo != null && File(logo).existsSync())
-                            pw.Image(pw.MemoryImage(File(logo).readAsBytesSync()), height: 40),
-                          pw.SizedBox(width: 8),
-                          pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(name, style: pw.TextStyle(font: montserrat, fontSize: 12)),
-                              pw.Text(info, style: pw.TextStyle(font: montserrat, fontSize: 10)),
-                              pw.Text(beneficiary,
-                                  style: pw.TextStyle(
-                                      font: montserrat,
-                                      fontSize: 10,
-                                      fontWeight: pw.FontWeight.bold,
-                                      color: _colorFromInt(s.highlightColor))),
-                            ],
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }*/
-
   // ─────────────────────────────────────────────
   // Página de sección
   // ─────────────────────────────────────────────
-  pw.Page _buildSectionPage(Section section, StyleSettings s, pw.Font font) => pw.Page(
-    pageFormat: PdfPageFormat.a4,
-    margin: pw.EdgeInsets.zero,
-    build: (_) => pw.Container(
-      color: _colorFromInt(s.backgroundColor),
-      child: pw.Center(
-        child: pw.Text(section.name.toUpperCase(),
-            style: pw.TextStyle(
+  pw.Page _buildSectionPage(
+      Section section, StyleSettings s, pw.Font font) =>
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: pw.EdgeInsets.zero,
+        build: (_) => pw.Container(
+          color: _colorFromInt(s.backgroundColor),
+          child: pw.Center(
+            child: pw.Text(
+              section.name.toUpperCase(),
+              style: pw.TextStyle(
                 font: font,
                 fontWeight: pw.FontWeight.bold,
                 fontSize: 36,
-                color: _colorFromInt(s.highlightColor))),
-      ),
-    ),
-  );
+                color: _colorFromInt(s.highlightColor),
+              ),
+            ),
+          ),
+        ),
+      );
 
   // ─────────────────────────────────────────────
-  // Página de productos
+  // Página de productos (recibe zoom y offset)
   // ─────────────────────────────────────────────
-  pw.Page _buildProductsPage(List<Product> products, StyleSettings s, pw.Font titleFont, pw.Font textFont) => pw.Page(
-    pageFormat: PdfPageFormat.a4,
-    margin: pw.EdgeInsets.zero,
-    build: (_) => pw.Container(
-      color: _colorFromInt(s.backgroundColor),
-      padding: const pw.EdgeInsets.all(24),
-      child: pw.Column(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-        children: products.map((p) => _productCard(p, s, titleFont, textFont)).toList(),
-      ),
-    ),
-  );
+  pw.Page _buildProductsPage(
+      List<Product> products,
+      StyleSettings s,
+      pw.Font titleFont,
+      pw.Font textFont,
+      Map<int, Map<String, double>> imageSettings,
+      ) =>
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: pw.EdgeInsets.zero,
+        build: (_) => pw.Container(
+          color: _colorFromInt(s.backgroundColor),
+          padding: const pw.EdgeInsets.all(24),
+          child: pw.Column(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+            children: products
+                .map((p) => _productCard(
+              p,
+              s,
+              titleFont,
+              textFont,
+              imageSettings[p.id ?? -1],
+            ))
+                .toList(),
+          ),
+        ),
+      );
 
   // ─────────────────────────────────────────────
-  // Tarjeta de producto
+  // Tarjeta de producto (aplica zoom/offset)
   // ─────────────────────────────────────────────
-  pw.Widget _productCard(Product p, StyleSettings s, pw.Font titleFont, pw.Font textFont) {
+  pw.Widget _productCard(
+      Product p,
+      StyleSettings s,
+      pw.Font titleFont,
+      pw.Font textFont,
+      Map<String, double>? imageSetting,
+      ) {
     final hasImage = p.imagePath != null && File(p.imagePath!).existsSync();
     pw.ImageProvider? img;
     if (hasImage) img = pw.MemoryImage(File(p.imagePath!).readAsBytesSync());
 
+    final zoom = imageSetting?['zoom'] ?? 1.0;
+    final offsetX = imageSetting?['offsetX'] ?? 0.0;
+    final offsetY = imageSetting?['offsetY'] ?? 0.0;
+
     return pw.Container(
       height: 320,
       margin: const pw.EdgeInsets.symmetric(vertical: 12),
-      decoration: pw.BoxDecoration(color: _colorFromInt(s.infoBoxColor), borderRadius: pw.BorderRadius.circular(12)),
+      decoration: pw.BoxDecoration(
+        color: _colorFromInt(s.infoBoxColor),
+        borderRadius: pw.BorderRadius.circular(12),
+      ),
       padding: const pw.EdgeInsets.all(12),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -413,18 +345,37 @@ class PdfService {
           pw.Container(
             width: 180,
             height: 260,
-            decoration:
-            pw.BoxDecoration(color: _colorFromInt(s.highlightColor), borderRadius: pw.BorderRadius.circular(16)),
+            decoration: pw.BoxDecoration(
+              color: _colorFromInt(s.highlightColor),
+              borderRadius: pw.BorderRadius.circular(16),
+            ),
             child: hasImage
                 ? pw.ClipRRect(
               horizontalRadius: 16,
               verticalRadius: 16,
-              child: pw.Image(img!, fit: pw.BoxFit.cover),
+              child: pw.Transform.translate(
+                offset: PdfPoint(offsetX * 35, -offsetY * 35),
+                child: pw.Transform.scale(
+                  scale: zoom,
+                  child: pw.Image(img!,
+                    width: 180, // mismo ancho que en la app
+                    height: 260, // misma altura que en la app
+                    fit: pw.BoxFit.fill,
+                    alignment: pw.Alignment.center,
+                  ),
+                ),
+              ),
             )
                 : pw.Center(
-              child: pw.Text('Sin imagen',
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(font: textFont, fontSize: 12, color: _colorFromInt(s.textColor))),
+              child: pw.Text(
+                'Sin imagen',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(
+                  font: textFont,
+                  fontSize: 12,
+                  color: _colorFromInt(s.textColor),
+                ),
+              ),
             ),
           ),
           pw.SizedBox(width: 20),
@@ -434,34 +385,45 @@ class PdfService {
               children: [
                 pw.Container(
                   margin: const pw.EdgeInsets.only(bottom: 14),
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 14), // más alto y más ancho
+                  padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
                   width: double.infinity,
                   decoration: pw.BoxDecoration(
                     color: _colorFromInt(s.highlightColor),
                     borderRadius: pw.BorderRadius.circular(12),
                   ),
                   child: pw.Align(
+                    alignment: pw.Alignment.centerLeft,
                     child: pw.Text(
                       p.name,
                       textAlign: pw.TextAlign.left,
                       style: pw.TextStyle(
                         font: titleFont,
                         fontWeight: pw.FontWeight.bold,
-                        fontSize: 22, // un poco más grande
+                        fontSize: 22,
                         color: _colorFromInt(s.backgroundColor),
                       ),
                     ),
                   ),
                 ),
-                pw.Text(p.description,
-                    style: pw.TextStyle(font: textFont, fontSize: 14, color: _colorFromInt(s.textColor))),
+                pw.Text(
+                  p.description,
+                  style: pw.TextStyle(
+                    font: textFont,
+                    fontSize: 14,
+                    color: _colorFromInt(s.textColor),
+                  ),
+                ),
                 pw.SizedBox(height: 12),
-                pw.Text('\$${p.price.toStringAsFixed(2)}',
-                    style: pw.TextStyle(
-                        font: titleFont,
-                        fontWeight: pw.FontWeight.bold,
-                        fontSize: 20,
-                        color: _colorFromInt(s.highlightColor))),
+                pw.Text(
+                  '\$${p.price.toStringAsFixed(2)}',
+                  style: pw.TextStyle(
+                    font: titleFont,
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 20,
+                    color: _colorFromInt(s.highlightColor),
+                  ),
+                ),
               ],
             ),
           ),
@@ -471,14 +433,16 @@ class PdfService {
   }
 
   // ─────────────────────────────────────────────
-  // Reporte de productos agotados con fecha de reactivación
+  // Reporte de productos agotados
   // ─────────────────────────────────────────────
-  Future<Uint8List> buildDepletedProductsReport(List<Product> products) async {
+  Future<Uint8List> buildDepletedProductsReport(
+      List<Product> products) async {
     final doc = pw.Document();
-    final montserrat = pw.Font.ttf(await rootBundle.load('assets/fonts/Montserrat-Regular.ttf'));
-    final openSans = pw.Font.ttf(await rootBundle.load('assets/fonts/OpenSans-Regular.ttf'));
+    final montserrat =
+    pw.Font.ttf(await rootBundle.load('assets/fonts/Montserrat-Regular.ttf'));
+    final openSans =
+    pw.Font.ttf(await rootBundle.load('assets/fonts/OpenSans-Regular.ttf'));
 
-    // 🔹 Preparamos los datos primero (antes del map)
     final productData = <Map<String, dynamic>>[];
 
     for (final p in products) {
@@ -486,7 +450,6 @@ class PdfService {
       final depletedAt = DateTime.tryParse(p.depletedAt ?? '');
       final logs = await _db.getProductLogs(p.id!);
 
-      // Encontrar última reactivación
       DateTime? lastReactivation;
       for (final log in logs) {
         if (log['action'] == 'reactivado') {
@@ -507,7 +470,6 @@ class PdfService {
       });
     }
 
-    // 🔹 Construcción del PDF
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -529,19 +491,23 @@ class PdfService {
               final createdAt = entry['createdAt'] as DateTime?;
               final depletedAt = entry['depletedAt'] as DateTime?;
               final lastReactivation = entry['lastReactivation'] as DateTime?;
-              final img = (p.imagePath != null && File(p.imagePath!).existsSync())
+              final img = (p.imagePath != null &&
+                  File(p.imagePath!).existsSync())
                   ? pw.MemoryImage(File(p.imagePath!).readAsBytesSync())
                   : null;
 
               final logText = StringBuffer();
               if (createdAt != null) {
-                logText.writeln('Creado: ${createdAt.day}/${createdAt.month}/${createdAt.year}');
+                logText.writeln(
+                    'Creado: ${createdAt.day}/${createdAt.month}/${createdAt.year}');
               }
               if (lastReactivation != null) {
-                logText.writeln('Reactivado: ${lastReactivation.day}/${lastReactivation.month}/${lastReactivation.year}');
+                logText.writeln(
+                    'Reactivado: ${lastReactivation.day}/${lastReactivation.month}/${lastReactivation.year}');
               }
               if (depletedAt != null) {
-                logText.writeln('Agotado: ${depletedAt.day}/${depletedAt.month}/${depletedAt.year}');
+                logText.writeln(
+                    'Agotado: ${depletedAt.day}/${depletedAt.month}/${depletedAt.year}');
               }
 
               return pw.Container(
@@ -601,12 +567,17 @@ class PdfService {
                           ),
                           pw.Text(
                             'Precio: \$${p.price.toStringAsFixed(2)}',
-                            style: pw.TextStyle(font: openSans, fontSize: 12),
+                            style:
+                            pw.TextStyle(font: openSans, fontSize: 12),
                           ),
                           pw.SizedBox(height: 6),
                           pw.Text(
                             logText.toString(),
-                            style: pw.TextStyle(font: openSans, fontSize: 11, color: PdfColors.black),
+                            style: pw.TextStyle(
+                              font: openSans,
+                              fontSize: 11,
+                              color: PdfColors.black,
+                            ),
                           ),
                         ],
                       ),
