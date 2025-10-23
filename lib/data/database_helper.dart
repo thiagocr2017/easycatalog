@@ -20,7 +20,8 @@ class DatabaseHelper {
 
   static Database? _database;
 
-  // Getter principal
+  // ─────────────────────────────────────────────
+  // ACCESO A LA BASE DE DATOS
   // ─────────────────────────────────────────────
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -216,13 +217,6 @@ class DatabaseHelper {
     );
 
     if (existing.isNotEmpty) {
-      // ✅ Actualiza los valores existentes
-      /*await db.update(
-        tableProductImageSettings,
-        setting.toMap(),
-        where: 'productId = ?',
-        whereArgs: [setting.productId],
-      );*/
 
       // 🔹 eliminamos el 'id' del mapa para evitar conflicto
       final data = Map<String, dynamic>.from(setting.toMap())..remove('id');
@@ -243,7 +237,6 @@ class DatabaseHelper {
     }
   }
 
-
   Future<ProductImageSetting?> getImageSetting(int productId) async {
     final db = await database;
     final res = await db.query(
@@ -253,6 +246,16 @@ class DatabaseHelper {
     );
     if (res.isNotEmpty) return ProductImageSetting.fromMap(res.first);
     return null;
+  }
+
+  // 🔹 Obtener todas las configuraciones de imagen
+  Future<Map<int, ProductImageSetting?>> getAllImageSettings() async {
+    final db = await database;
+    final result = await db.query(tableProductImageSettings);
+    return {
+      for (final row in result)
+        row['productId'] as int: ProductImageSetting.fromMap(row),
+    };
   }
 
   // ─────────────────────────────────────────────

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../data/database_helper.dart';
 import '../../models/product.dart';
-import '../../services/pdf_service.dart';
+import '../../services/depleted_report_service.dart';
 import '../catalog/pdf_preview_page.dart';
 import 'product_history_page.dart';
 
@@ -15,8 +15,13 @@ class DepletedProductsPage extends StatefulWidget {
 
 class _DepletedProductsPageState extends State<DepletedProductsPage> {
   final _db = DatabaseHelper.instance;
-  final _pdfService = PdfService();
-  List<Product> _depleted = [];
+  final _reportService = DepletedReportService();
+
+  // 🔹 Datos principales
+  List<Product> _allDepleted = []; // todos los productos agotados
+  List<Product> _filteredDepleted = []; // lista filtrada mostrada
+  String _searchQuery = ''; // texto de búsqueda activo
+  List<Map<String, dynamic>> _sections = [];
 
   @override
   void initState() {
@@ -24,15 +29,54 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
     _loadDepleted();
   }
 
+  // ─────────────────────────────────────────────
+  // Cargar productos agotados y secciones
+  // ─────────────────────────────────────────────
   Future<void> _loadDepleted() async {
     final data = await _db.getProducts();
+    final sections = await _db.getSections();
+
+    final depleted = data
+        .map((e) => Product.fromMap(e))
+        .where((p) => p.isDepleted)
+        .toList();
+
+    if (!mounted) return;
     setState(() {
-      _depleted = data.map((e) => Product.fromMap(e))
-          .where((p) => p.isDepleted)
-          .toList();
+      _allDepleted = depleted;
+      _filteredDepleted = depleted;
+      _sections = sections;
     });
   }
 
+  // ─────────────────────────────────────────────
+  // Filtro de búsqueda
+  // ─────────────────────────────────────────────
+  void _filterProducts(String query) {
+    final q = query.toLowerCase();
+
+    setState(() {
+      _searchQuery = query;
+
+      _filteredDepleted = _allDepleted.where((p) {
+        final nameMatch = p.name.toLowerCase().contains(q);
+        final descMatch = p.description.toLowerCase().contains(q);
+
+        final section = _sections.firstWhere(
+              (s) => s['id'] == p.sectionId,
+          orElse: () => {'name': ''},
+        );
+        final sectionMatch =
+        (section['name'] as String).toLowerCase().contains(q);
+
+        return nameMatch || descMatch || sectionMatch;
+      }).toList();
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // Reactivar producto agotado
+  // ─────────────────────────────────────────────
   Future<void> _reactivateProduct(Product p) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -40,11 +84,16 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
         title: const Text('Reactivar producto'),
         content: Text('¿Deseas reactivar "${p.name}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sí, reactivar')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Sí, reactivar')),
         ],
       ),
     );
+
     if (confirm != true) return;
 
     final updated = p.toMap();
@@ -55,7 +104,8 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
 
     if (!mounted) return;
     setState(() {
-      _depleted.remove(p);
+      _allDepleted.remove(p);
+      _filteredDepleted.remove(p);
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -63,30 +113,45 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // Generar reporte PDF (nuevo módulo)
+  // ─────────────────────────────────────────────
   void _previewPdf() {
+    if (_allDepleted.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No hay productos agotados para generar reporte')),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PdfPreviewPage(
           customBuilder: (format) async =>
-          await _pdfService.buildDepletedProductsReport(_depleted),
-          title: 'Vista previa de productos agotados',
+          await _reportService.buildDepletedProductsReport(_allDepleted),
+          title: 'Reporte de productos agotados',
           fileName: 'productos_agotados.pdf',
         ),
       ),
     );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Generando reporte de productos agotados...')),
+    );
   }
 
-  /// ✅ Nueva función: confirma y elimina producto + imagen
+  // ─────────────────────────────────────────────
+  // Eliminar producto definitivamente
+  // ─────────────────────────────────────────────
   Future<void> _confirmAndDeleteProduct(Product p) async {
-    // ⚡ Diálogo de confirmación
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar producto'),
         content: Text(
-          '¿Seguro que deseas eliminar "${p.name}"?\n'
-              'Esta acción no se puede deshacer.',
+          '¿Seguro que deseas eliminar "${p.name}"?\nEsta acción no se puede deshacer.',
         ),
         actions: [
           TextButton(
@@ -104,7 +169,7 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
 
     if (confirm != true) return;
 
-    // 🗑️ 1️⃣ Borra imagen local (si existe)
+    // 🗑️ Eliminar imagen
     if (p.imagePath != null && File(p.imagePath!).existsSync()) {
       try {
         await File(p.imagePath!).delete();
@@ -113,13 +178,15 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
       }
     }
 
-    // 🧹 2️⃣ Borra el producto y dependencias
+    // 🧹 Eliminar producto y dependencias
     await _db.deleteProductCascade(p.id!);
 
     if (!mounted) return;
-    setState(() => _depleted.remove(p));
+    setState(() {
+      _allDepleted.remove(p);
+      _filteredDepleted.remove(p);
+    });
 
-    // ✅ 3️⃣ Muestra confirmación segura
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Producto "${p.name}" eliminado completamente'),
@@ -128,61 +195,114 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // UI PRINCIPAL
+  // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Productos Agotados')),
-      body: _depleted.isEmpty
-          ? const Center(child: Text('No hay productos agotados'))
-          : ListView.builder(
-        itemCount: _depleted.length,
-        itemBuilder: (context, i) {
-          final p = _depleted[i];
-          final date = DateTime.tryParse(p.depletedAt ?? '');
-          final formatted = date != null
-              ? '${date.day}/${date.month}/${date.year}'
-              : '';
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: ListTile(
-              leading: p.imagePath != null && File(p.imagePath!).existsSync()
-                  ? Image.file(File(p.imagePath!), width: 50, height: 50, fit: BoxFit.cover)
-                  : const Icon(Icons.image_not_supported),
-              title: Text(p.name),
-              subtitle: Text('Agotado el $formatted'),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.folder_copy_outlined, color: Colors.grey),
-                    tooltip: 'Ver historial',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ProductHistoryPage(
-                            productId: p.id!,
-                            productName: p.name,
-                          ),
-                        ),
-                      );
-                    },
+      body: Column(
+        children: [
+          // 🔍 Campo de búsqueda
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: TextField(
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'Buscar por nombre, descripción o sección...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: _filterProducts,
+            ),
+          ),
+
+          // 📊 Contador de resultados
+          if (_allDepleted.isNotEmpty)
+            Padding(
+              padding:
+              const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.green.shade50,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: Text(
+                    _searchQuery.isEmpty
+                        ? 'Mostrando ${_allDepleted.length} productos agotados'
+                        : 'Mostrando ${_filteredDepleted.length} de ${_allDepleted.length} resultados para: "$_searchQuery"',
+                    style: const TextStyle(fontSize: 13, color: Colors.green),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.remove_red_eye, color: Colors.green),
-                    tooltip: 'Reactivar producto',
-                    onPressed: () => _reactivateProduct(p),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_forever, color: Colors.red),
-                    tooltip: 'Eliminar permanentemente',
-                    onPressed: () => _confirmAndDeleteProduct(p),
-                  ),
-                ],
+                ),
+
               ),
             ),
-          );
-        },
+
+          // 📋 Lista filtrada de productos agotados
+          Expanded(
+            child: _filteredDepleted.isEmpty
+                ? const Center(child: Text('No hay productos agotados'))
+                : ListView.builder(
+              itemCount: _filteredDepleted.length,
+              itemBuilder: (context, i) {
+                final p = _filteredDepleted[i];
+                final date = DateTime.tryParse(p.depletedAt ?? '');
+                final formatted = date != null
+                    ? '${date.day}/${date.month}/${date.year}'
+                    : '';
+                return Card(
+                  margin: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  child: ListTile(
+                    leading: p.imagePath != null &&
+                        File(p.imagePath!).existsSync()
+                        ? Image.file(File(p.imagePath!),
+                        width: 50, height: 50, fit: BoxFit.cover)
+                        : const Icon(Icons.image_not_supported),
+                    title: Text(p.name),
+                    subtitle: Text('Agotado el $formatted'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.folder_copy_outlined,
+                              color: Colors.grey),
+                          tooltip: 'Ver historial',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ProductHistoryPage(
+                                  productId: p.id!,
+                                  productName: p.name,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.remove_red_eye,
+                              color: Colors.green),
+                          tooltip: 'Reactivar producto',
+                          onPressed: () => _reactivateProduct(p),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_forever,
+                              color: Colors.redAccent),
+                          tooltip: 'Eliminar permanentemente',
+                          onPressed: () => _confirmAndDeleteProduct(p),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _previewPdf,

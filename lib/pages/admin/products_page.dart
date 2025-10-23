@@ -1,11 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../data/database_helper.dart';
 import '../../models/product.dart';
 import '../../models/product_image_setting.dart';
 import '../../models/section.dart';
+import '../catalog/product_form_page.dart';
+import '../../widgets/product_image_preview.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -16,9 +15,11 @@ class ProductsPage extends StatefulWidget {
 
 class _ProductsPageState extends State<ProductsPage> {
   final _db = DatabaseHelper.instance;
+  final Map<int?, bool> _expandedSections = {}; // Estado de visibilidad por sección
+
   List<Product> _products = [];
   List<Section> _sections = [];
-  //Map<int, String> _sectionNames = {};
+  Map<int, ProductImageSetting?> _imageSettings = {};
   String _searchQuery = '';
 
   @override
@@ -28,7 +29,7 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   // ─────────────────────────────────────────────
-  // CARGA INICIAL DE PRODUCTOS Y SECCIONES
+  // CARGA PRODUCTOS, SECCIONES Y CONFIGURACIONES
   // ─────────────────────────────────────────────
   Future<void> _loadData() async {
     await _db.ensureProductSortOrderColumn();
@@ -38,21 +39,23 @@ class _ProductsPageState extends State<ProductsPage> {
     final sections = sectionData.map((e) => Section.fromMap(e)).toList()
       ..sort((a, b) => (a.sortOrder ?? 0).compareTo(b.sortOrder ?? 0));
     final products = productData.map((e) => Product.fromMap(e)).toList();
-
-    /*final sectionNames = {
-      for (final s in sections) if (s.id != null) s.id!: s.name
-    };*/
+    final settings = await _db.getAllImageSettings();
 
     if (!mounted) return;
     setState(() {
       _sections = sections;
       _products = products..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-      //_sectionNames = sectionNames;
+      _imageSettings = settings;
+
+      // 🔹 Inicializa todas las secciones expandidas por defecto
+      for (final s in sections) {
+        _expandedSections[s.id] ??= true;
+      }
     });
   }
 
   // ─────────────────────────────────────────────
-  // FILTRO DE BÚSQUEDA (NOMBRE + DESCRIPCIÓN)
+  // FILTRO DE BÚSQUEDA
   // ─────────────────────────────────────────────
   List<Product> get _filteredProducts {
     final q = _searchQuery.toLowerCase();
@@ -63,260 +66,32 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   // ─────────────────────────────────────────────
-  // AGREGAR O EDITAR PRODUCTO
+  // ABRIR FORMULARIO (NUEVO / EDITAR)
   // ─────────────────────────────────────────────
-  Future<void> _addOrEditProduct({Product? product}) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final parentContext = context;
-
-    final nameCtrl = TextEditingController(text: product?.name ?? '');
-    final descCtrl = TextEditingController(text: product?.description ?? '');
-    final priceCtrl = TextEditingController(text: product?.price.toString() ?? '');
-    Section? selectedSection = _sections.firstWhere(
-          (s) => s.id == product?.sectionId,
-      orElse: () => _sections.isNotEmpty ? _sections.first : Section(name: ''),
-    );
-    String? imagePath = product?.imagePath;
-
-    // 🔹 Variables de encuadre
-    double zoom = 1.0;
-    double offsetX = 0.0;
-    double offsetY = 0.0;
-
-    // 🔹 Si el producto ya existe, carga la configuración previa
-    if (product?.id != null) {
-      final conf = await _db.getImageSetting(product!.id!);
-      if (conf != null) {
-        zoom = conf.zoom;
-        offsetX = conf.offsetX;
-        offsetY = conf.offsetY;
-      }
-    }
-
-    if (!parentContext.mounted) return;
-
-    await showDialog(
-      context: parentContext,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(product == null ? 'Nuevo producto' : 'Editar producto'),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-                TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Descripción')),
-                TextField(
-                  controller: priceCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Precio'),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<Section>(
-                  initialValue: selectedSection,
-                  items: _sections
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
-                      .toList(),
-                  onChanged: (val) => selectedSection = val,
-                  decoration: const InputDecoration(labelText: 'Sección'),
-                ),
-                const SizedBox(height: 10),
-
-                // 📸 Botón de selección de imagen
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: imagePath != null
-                        ? Colors.green.shade100
-                        : Theme.of(context).primaryColor,
-                    foregroundColor:
-                    imagePath != null ? Colors.green.shade800 : Colors.white,
-                  ),
-                  onPressed: () async {
-                    final picker = ImagePicker();
-                    final xfile =
-                    await picker.pickImage(source: ImageSource.gallery);
-                    if (xfile == null) return;
-
-                    String cleanName = nameCtrl.text.trim().toLowerCase();
-                    if (cleanName.isEmpty) {
-                      cleanName =
-                      'producto_${DateTime.now().millisecondsSinceEpoch}';
-                    }
-                    cleanName =
-                        cleanName.replaceAll(RegExp(r'[^a-z0-9]+'), '-');
-                    final ext = xfile.name.split('.').last;
-
-                    final appDir = await getApplicationSupportDirectory();
-                    final imagesDir = Directory('${appDir.path}/images');
-                    if (!await imagesDir.exists()) {
-                      await imagesDir.create(recursive: true);
-                    }
-
-                    final newPath = '${imagesDir.path}/$cleanName.$ext';
-                    final newFile = await File(xfile.path).copy(newPath);
-                    setState(() => imagePath = newFile.path);
-
-                    // ✅ SnackBar seguro (sin use_build_context_synchronously)
-                    if (context.mounted) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                                content: Text(
-                                    'Imagen guardada como "$cleanName.$ext"')),
-                          );
-                        }
-                      });
-                    }
-                  },
-                  icon: Icon(imagePath != null
-                      ? Icons.check_circle_outline
-                      : Icons.image_outlined),
-                  label: Text(imagePath != null
-                      ? 'Imagen seleccionada'
-                      : 'Seleccionar imagen'),
-                ),
-
-                // 🧩 Herramientas de edición (solo si hay imagen)
-                if (imagePath != null && File(imagePath!).existsSync()) ...[
-                  const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 180, // igual que en PDF
-                      height: 260,
-                      color: Colors.grey.shade200,
-                      child: Transform.translate(
-                        offset: Offset(offsetX * 35, offsetY * 35),
-                        child: Transform.scale(
-                          scale: zoom,
-                          child:
-                          Image.file(File(imagePath!), fit: BoxFit.cover),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Ajustar imagen para PDF',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  Slider(
-                    value: zoom,
-                    min: 0.2,
-                    max: 5.0,
-                    divisions: 100,
-                    label: 'Zoom: ${zoom.toStringAsFixed(2)}x',
-                    onChanged: (v) => setState(() => zoom = v),
-                  ),
-                  Row(
-                    children: [
-                      const Text('Desplazamiento X'),
-                      Expanded(
-                        child: Slider(
-                          value: offsetX,
-                          min: -10.0,
-                          max: 10.0,
-                          divisions: 100,
-                          onChanged: (v) => setState(() => offsetX = v),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      const Text('Desplazamiento Y'),
-                      Expanded(
-                        child: Slider(
-                          value: offsetY,
-                          min: -10.0,
-                          max: 10.0,
-                          divisions: 100,
-                          onChanged: (v) => setState(() => offsetY = v),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                final desc = descCtrl.text.trim();
-                final price = double.tryParse(priceCtrl.text) ?? 0;
-                final sectionId = selectedSection?.id;
-                if (name.isEmpty || sectionId == null) return;
-
-                final data = Product(
-                  id: product?.id,
-                  name: name,
-                  description: desc,
-                  price: price,
-                  sectionId: sectionId,
-                  imagePath: imagePath,
-                  sortOrder: product?.sortOrder ?? _products.length,
-                ).toMap();
-
-                int productId;
-                if (product == null) {
-                  // 🆕 Nuevo producto
-                  productId = await _db.insertProduct(data);
-                } else {
-                  // ✏️ Producto existente
-                  await _db.updateProduct(data);
-                  productId = product.id!;
-                }
-
-                // 💾 Guardar zoom y encuadre en la tabla product_image_settings
-                await _db.upsertImageSetting(ProductImageSetting(
-                  productId: productId,
-                  zoom: zoom,
-                  offsetX: offsetX,
-                  offsetY: offsetY,
-                ));
-
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-
-                messenger.showSnackBar(SnackBar(
-                  content: Text(product == null
-                      ? 'Producto agregado correctamente'
-                      : 'Producto actualizado correctamente'),
-                ));
-
-                await _loadData();
-              },
-              child: const Text('Guardar'),
-            ),
-          ],
+  Future<void> _openProductForm({Product? product}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductFormPage(
+          product: product,
+          sections: _sections,
+          onSave: _loadData,
         ),
       ),
     );
   }
 
-
   // ─────────────────────────────────────────────
-  // CAMBIAR ESTADO (AGOTAR / REACTIVAR)
+  // CAMBIAR ESTADO (AGOTADO / ACTIVO)
   // ─────────────────────────────────────────────
   Future<void> _toggleDepleted(Product p) async {
     final newState = !p.isDepleted;
-    final actionText = newState ? 'agotar' : 'reactivar';
-
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: Text(newState ? 'Marcar como agotado' : 'Reactivar producto'),
-        content:
-        Text('¿Seguro que deseas $actionText el producto "${p.name}"?'),
+        content: Text(
+            '¿Seguro que deseas ${newState ? 'agotar' : 'reactivar'} "${p.name}"?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -349,11 +124,10 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   // ─────────────────────────────────────────────
-  // REORDENAR PRODUCTOS (DRAG & DROP)
+  // REORDENAR PRODUCTOS
   // ─────────────────────────────────────────────
   void _onReorder(List<Product> list, int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex--;
-
     setState(() {
       final item = list.removeAt(oldIndex);
       list.insert(newIndex, item);
@@ -365,16 +139,14 @@ class _ProductsPageState extends State<ProductsPage> {
 
     Future.microtask(() async {
       for (final p in list) {
-        if (p.id != null) {
-          await _db.updateProduct(p.toMap());
-        }
+        if (p.id != null) await _db.updateProduct(p.toMap());
       }
       await _loadData();
     });
   }
 
   // ─────────────────────────────────────────────
-  // UI PRINCIPAL (AGRUPADO POR SECCIÓN ORDENADA)
+  // INTERFAZ PRINCIPAL
   // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -391,7 +163,7 @@ class _ProductsPageState extends State<ProductsPage> {
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 16.0),
         child: FloatingActionButton(
-          onPressed: () => _addOrEditProduct(),
+          onPressed: () => _openProductForm(),
           child: const Icon(Icons.add),
         ),
       ),
@@ -399,6 +171,7 @@ class _ProductsPageState extends State<ProductsPage> {
         padding: const EdgeInsets.only(bottom: 80),
         child: Column(
           children: [
+            // 🔍 Campo de búsqueda
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: TextField(
@@ -412,114 +185,161 @@ class _ProductsPageState extends State<ProductsPage> {
                 onChanged: (value) => setState(() => _searchQuery = value),
               ),
             ),
+
+            // 📋 Lista de secciones y productos
             Expanded(
               child: orderedSections.isEmpty
                   ? const Center(child: Text('No hay secciones definidas'))
-                  : ListView(
-                children: [
-                  for (final s in orderedSections)
-                    if (grouped[s.id]?.isNotEmpty ?? false)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header de sección
-                          Container(
-                            width: double.infinity,
-                            color: Colors.green.shade50,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            child: Text(
-                              '${s.name} (${grouped[s.id]!.length})',
+                  : ListView.builder(
+                itemCount: orderedSections.length,
+                itemBuilder: (context, sectionIndex) {
+                  final s = orderedSections[sectionIndex];
+                  final products = grouped[s.id] ?? [];
+                  if (products.isEmpty) return const SizedBox.shrink();
+
+                  final isExpanded = _expandedSections[s.id] ?? true;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 🔹 Encabezado de sección con botón de expandir/colapsar
+                      Container(
+                        color: Colors.green.shade50,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Row(
+                          mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${s.name} (${products.length})',
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.green,
                               ),
                             ),
-                          ),
-                          ReorderableListView.builder(
-                            shrinkWrap: true,
-                            physics:
-                            const NeverScrollableScrollPhysics(),
-                            itemCount: grouped[s.id]!.length,
-                            onReorder: (oldIndex, newIndex) =>
-                                _onReorder(grouped[s.id]!,
-                                    oldIndex, newIndex),
-                            itemBuilder: (context, i) {
-                              final p = grouped[s.id]![i];
-                              return Card(
-                                key: ValueKey(p.id ?? p.name),
+                            IconButton(
+                              icon: Icon(
+                                isExpanded
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                color: Colors.green.shade700,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  final current = _expandedSections[s.id] ?? true;
+                                  _expandedSections[s.id] = !current; // ← alterna solo la actual
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // 🔸 Lista de productos (solo si está expandida)
+                      if (isExpanded)
+                        ReorderableListView(
+                          key: PageStorageKey('section_${s.id}'),
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          onReorder: (o, n) =>
+                              _onReorder(products, o, n),
+                          children: [
+                            for (final p in products)
+                              Card(
+                                key: ValueKey(p.id),
                                 margin: const EdgeInsets.symmetric(
                                     horizontal: 9, vertical: 13),
-                                child: ListTile(
-
-                                  leading: FutureBuilder<ProductImageSetting?>(
-                                    future: _db.getImageSetting(p.id!),
-                                    builder: (context, snapshot) {
-                                      final conf = snapshot.data;
-                                      final zoom = conf?.zoom ?? 1.0;
-                                      final offsetX = conf?.offsetX ?? 0.0;
-                                      final offsetY = conf?.offsetY ?? 0.0;
-
-                                      if (p.imagePath == null || !File(p.imagePath!).existsSync()) {
-                                        return const Icon(Icons.image_not_supported);
-                                      }
-
-                                      return ClipRRect(
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: Container(
-                                          width: 50,
-                                          height: 50,
-                                          color: Colors.grey.shade100,
-                                          child: Transform.translate(
-                                            offset: Offset(offsetX * 15, offsetY * 15), // 🔹 más sutil
-                                            child: Transform.scale(
-                                              scale: zoom,
-                                              child: Image.file(
-                                                File(p.imagePath!),
-                                                fit: BoxFit.cover,
+                                color: Colors.grey.shade900,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.center,
+                                    children: [
+                                      // 🖼️ Imagen del producto
+                                      ProductImagePreview(
+                                        imagePath: p.imagePath,
+                                        zoom: _imageSettings[p.id]?.zoom ??
+                                            1.0,
+                                        offsetX: _imageSettings[p.id]
+                                            ?.offsetX ??
+                                            0.0,
+                                        offsetY: _imageSettings[p.id]
+                                            ?.offsetY ??
+                                            0.0,
+                                        scaleFactor: 0.35,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      // 🧾 Información del producto
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              p.name,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight:
+                                                FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                              overflow:
+                                              TextOverflow.ellipsis,
+                                            ),
+                                            Text(
+                                              'Precio: \$${p.price.toStringAsFixed(2)}',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color:
+                                                Colors.grey.shade300,
                                               ),
                                             ),
+                                          ],
+                                        ),
+                                      ),
+                                      // ⚙️ Botones de acción
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: Icon(
+                                              p.isDepleted
+                                                  ? Icons.visibility_off
+                                                  : Icons.visibility,
+                                              color: p.isDepleted
+                                                  ? Colors.red
+                                                  : Colors.green,
+                                            ),
+                                            tooltip: p.isDepleted
+                                                ? 'Producto agotado'
+                                                : 'Activo',
+                                            onPressed: () =>
+                                                _toggleDepleted(p),
                                           ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  title: Text(p.name),
-                                  subtitle: Text(
-                                      'Precio: \$${p.price.toStringAsFixed(2)}'),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(
-                                          p.isDepleted
-                                              ? Icons.visibility_off
-                                              : Icons.visibility,
-                                          color: p.isDepleted
-                                              ? Colors.red
-                                              : Colors.green,
-                                        ),
-                                        onPressed: () =>
-                                            _toggleDepleted(p),
+                                          IconButton(
+                                            icon: const Icon(Icons.edit,
+                                                color: Colors.white),
+                                            tooltip: 'Editar producto',
+                                            onPressed: () =>
+                                                _openProductForm(
+                                                    product: p),
+                                          ),
+                                          const Icon(Icons.drag_handle,
+                                              color: Colors.grey),
+                                        ],
                                       ),
-                                      IconButton(
-                                        icon: const Icon(Icons.edit),
-                                        onPressed: () =>
-                                            _addOrEditProduct(
-                                                product: p),
-                                      ),
-                                      const Icon(Icons.drag_handle,
-                                          color: Colors.grey),
                                     ],
                                   ),
                                 ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                ],
+                              ),
+                          ],
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ],

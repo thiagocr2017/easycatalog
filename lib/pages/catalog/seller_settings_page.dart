@@ -21,9 +21,7 @@ class _SellerSettingsPageState extends State<SellerSettingsPage> {
     _loadSellers();
   }
 
-  // ─────────────────────────────────────────────
   // Cargar vendedores
-  // ─────────────────────────────────────────────
   Future<void> _loadSellers() async {
     setState(() => _loading = true);
     final prefs = await SharedPreferences.getInstance();
@@ -38,9 +36,6 @@ class _SellerSettingsPageState extends State<SellerSettingsPage> {
     });
   }
 
-  // ─────────────────────────────────────────────
-  // Obtener datos de vendedor
-  // ─────────────────────────────────────────────
   Future<Map<String, String>> _getSellerData(int id) async {
     final data = await _db.getSellerSettings(id);
     return {
@@ -50,9 +45,6 @@ class _SellerSettingsPageState extends State<SellerSettingsPage> {
     };
   }
 
-  // ─────────────────────────────────────────────
-  // Crear vendedor
-  // ─────────────────────────────────────────────
   Future<void> _addSeller() async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
@@ -94,9 +86,6 @@ class _SellerSettingsPageState extends State<SellerSettingsPage> {
     _showSnack('Vendedor "$name" agregado');
   }
 
-  // ─────────────────────────────────────────────
-  // Editar vendedor
-  // ─────────────────────────────────────────────
   Future<void> _editSeller(int id) async {
     final current = await _getSellerData(id);
     final nameCtrl = TextEditingController(text: current['name']);
@@ -133,9 +122,6 @@ class _SellerSettingsPageState extends State<SellerSettingsPage> {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // Eliminar vendedor
-  // ─────────────────────────────────────────────
   Future<void> _deleteSeller(int id) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -162,9 +148,6 @@ class _SellerSettingsPageState extends State<SellerSettingsPage> {
     _showSnack('Vendedor eliminado');
   }
 
-  // ─────────────────────────────────────────────
-  // Activar vendedor
-  // ─────────────────────────────────────────────
   Future<void> _setActiveSeller(int id) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('activeSellerId', id);
@@ -172,17 +155,11 @@ class _SellerSettingsPageState extends State<SellerSettingsPage> {
     setState(() => _activeSellerId = id);
   }
 
-  // ─────────────────────────────────────────────
-  // Snackbar segura (sin usar context después de await)
-  // ─────────────────────────────────────────────
   void _showSnack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ─────────────────────────────────────────────
-  // UI PRINCIPAL
-  // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loading) {

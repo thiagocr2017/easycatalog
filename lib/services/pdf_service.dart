@@ -10,9 +10,13 @@ import '../models/section.dart';
 import '../models/style_settings.dart';
 import '../models/seller_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../widgets/product_image_preview.dart' show ProductImagePreview;
 
 class PdfService {
   final _db = DatabaseHelper.instance;
+
+  static const double imgWidth = ProductImagePreview.baseWidth;
+  static const double imgHeight = ProductImagePreview.baseHeight;
 
   // ─────────────────────────────────────────────
   // Cargar configuración visual
@@ -325,14 +329,21 @@ class PdfService {
       ) {
     final hasImage = p.imagePath != null && File(p.imagePath!).existsSync();
     pw.ImageProvider? img;
-    if (hasImage) img = pw.MemoryImage(File(p.imagePath!).readAsBytesSync());
+    if (hasImage) {
+      img = pw.MemoryImage(File(p.imagePath!).readAsBytesSync());
+    }
 
+    // 🔹 Referencia a los tamaños base definidos en ProductImagePreview
+    const double imgWidth = ProductImagePreview.baseWidth;
+    const double imgHeight = ProductImagePreview.baseHeight;
+
+    // 🔹 Configuración del zoom y desplazamientos guardados en BD
     final zoom = imageSetting?['zoom'] ?? 1.0;
     final offsetX = imageSetting?['offsetX'] ?? 0.0;
     final offsetY = imageSetting?['offsetY'] ?? 0.0;
 
     return pw.Container(
-      height: 320,
+      height: imgHeight + 60, // espacio extra para texto debajo
       margin: const pw.EdgeInsets.symmetric(vertical: 12),
       decoration: pw.BoxDecoration(
         color: _colorFromInt(s.infoBoxColor),
@@ -342,28 +353,37 @@ class PdfService {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
+          // 🖼️ Imagen del producto (idéntica a la vista de Flutter)
           pw.Container(
-            width: 180,
-            height: 260,
+            width: imgWidth,
+            height: imgHeight,
             decoration: pw.BoxDecoration(
               color: _colorFromInt(s.highlightColor),
               borderRadius: pw.BorderRadius.circular(16),
+              border: pw.Border.all(color: _colorFromInt(s.highlightColor), width: 5.0)
+
             ),
             child: hasImage
                 ? pw.ClipRRect(
               horizontalRadius: 16,
               verticalRadius: 16,
-              child: pw.Transform.translate(
-                offset: PdfPoint(offsetX * 35, -offsetY * 35),
-                child: pw.Transform.scale(
-                  scale: zoom,
-                  child: pw.Image(img!,
-                    width: 180, // mismo ancho que en la app
-                    height: 260, // misma altura que en la app
-                    fit: pw.BoxFit.fill,
-                    alignment: pw.Alignment.center,
+              child: pw.Stack(
+                alignment: pw.Alignment.center,
+                children: [
+                  pw.Transform.translate(
+                    offset: PdfPoint(offsetX * 35, -offsetY * 35),
+                    child: pw.Transform.scale(
+                      scale: zoom,
+                      child: pw.Image(
+                        img!,
+                        width: imgWidth,
+                        height: imgHeight,
+                        fit: pw.BoxFit.fill, // ✅ no recorta, mantiene proporción
+                        alignment: pw.Alignment.center,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             )
                 : pw.Center(
@@ -378,30 +398,37 @@ class PdfService {
               ),
             ),
           ),
+
           pw.SizedBox(width: 20),
+
+          // 🧾 Información del producto
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
+                // 🏷️ Franja de color detrás del nombre del producto (alineada a la izquierda)
                 pw.Container(
                   margin: const pw.EdgeInsets.only(bottom: 14),
-                  padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  width: double.infinity,
-                  decoration: pw.BoxDecoration(
-                    color: _colorFromInt(s.highlightColor),
-                    borderRadius: pw.BorderRadius.circular(12),
-                  ),
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 0, vertical: 0),
                   child: pw.Align(
-                    alignment: pw.Alignment.centerLeft,
-                    child: pw.Text(
-                      p.name,
-                      textAlign: pw.TextAlign.left,
-                      style: pw.TextStyle(
-                        font: titleFont,
-                        fontWeight: pw.FontWeight.bold,
-                        fontSize: 22,
-                        color: _colorFromInt(s.backgroundColor),
+                    alignment: pw.Alignment.centerLeft, // 🔹 alinea la franja completa a la izquierda
+                    child: pw.Container(
+                      width: double.infinity, // 🔹 Ocupa todo el ancho dentro del bloque, dejando padding lateral.
+                      //width: imgWidth * 0.9, // 🔹 ocupa el 90 % del ancho del área de texto
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: pw.BoxDecoration(
+                        color: _colorFromInt(s.highlightColor),
+                        borderRadius: pw.BorderRadius.circular(12),
+                      ),
+                      child: pw.Text(
+                        p.name,
+                        textAlign: pw.TextAlign.left, // 🔹 texto alineado a la izquierda dentro de la franja
+                        style: pw.TextStyle(
+                          font: titleFont,
+                          fontWeight: pw.FontWeight.bold,
+                          fontSize: 22,
+                          color: _colorFromInt(s.backgroundColor),
+                        ),
                       ),
                     ),
                   ),
@@ -432,6 +459,7 @@ class PdfService {
     );
   }
 
+/*
   // ─────────────────────────────────────────────
   // Reporte de productos agotados
   // ─────────────────────────────────────────────
@@ -592,5 +620,5 @@ class PdfService {
     );
 
     return doc.save();
-  }
+  }*/
 }
