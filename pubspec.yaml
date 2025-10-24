@@ -38,6 +38,10 @@ dependencies:
   shared_preferences: ^2.3.1
   flutter_launcher_icons: ^0.14.4
   flutter_image_compress: ^2.4.0
+
+  # Importar exportar a Excel
+  excel: ^2.1.0
+
   # Tamaño de la ventana Apps
   window_size: ^0.1.0
 

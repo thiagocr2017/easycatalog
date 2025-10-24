@@ -57,6 +57,15 @@ class AdminHomePage extends StatelessWidget {
             subtitle: const Text('Nombre, teléfono y mensaje de WhatsApp'),
             onTap: () => Navigator.pushNamed(context, '/catalog/seller_settings'),
           ),
+
+          ListTile(
+            leading: const Icon(Icons.import_export_outlined),
+            title: const Text('Importar / Exportar productos'),
+            subtitle: const Text('Cargar o guardar catálogo desde Excel'),
+            onTap: () => Navigator.pushNamed(context, '/admin/import_export'),
+          ),
+
+
         ],
       ),
     );
