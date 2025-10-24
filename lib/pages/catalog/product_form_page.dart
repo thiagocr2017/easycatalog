@@ -32,18 +32,16 @@ class _ProductFormPageState extends State<ProductFormPage> {
   late TextEditingController _descCtrl;
   late TextEditingController _priceCtrl;
   Section? _selectedSection;
-  String? _imagePath;
+  String? _imagePath; // 🔹 ahora guarda solo el nombre de archivo
+  bool _isActive = true; // 🔹 nuevo campo para activar/desactivar producto
 
   double _zoom = 1.0;
   double _offsetX = 0.0;
   double _offsetY = 0.0;
 
-  bool isActive = true; // ✅ Nuevo: control del estado activo/inactivo
-
   @override
   void initState() {
     super.initState();
-
     _nameCtrl = TextEditingController(text: widget.product?.name ?? '');
     _descCtrl = TextEditingController(text: widget.product?.description ?? '');
     _priceCtrl = TextEditingController(
@@ -57,10 +55,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
     );
 
     _imagePath = widget.product?.imagePath;
-
-    // ✅ Inicializa el estado activo/inactivo
-    isActive = widget.product?.isActive ?? true;
-
+    _isActive = widget.product?.isActive ?? true;
     _loadImageSettings();
   }
 
@@ -77,7 +72,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
     }
   }
 
-  // 📸 Seleccionar imagen (mantiene archivo original + optimiza peso)
+  // 📸 Seleccionar imagen y guardarla de forma optimizada (solo nombre de archivo)
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final xfile = await picker.pickImage(source: ImageSource.gallery);
@@ -97,6 +92,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
     final newPath = '${imagesDir.path}/$cleanName.$ext';
 
     try {
+      // 🔹 Comprime la imagen antes de guardar
       final compressedBytes = await FlutterImageCompress.compressWithFile(
         xfile.path,
         minHeight: 1200,
@@ -106,26 +102,31 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
       if (compressedBytes != null) {
         final newFile = await File(newPath).writeAsBytes(compressedBytes);
-        setState(() => _imagePath = newFile.path);
 
-        // Limpiar cache para forzar recarga
+        // 🔹 Guardamos solo el nombre del archivo, no la ruta completa
+        setState(() => _imagePath = newFile.uri.pathSegments.last);
+
+        // 🔹 Limpia el caché de imágenes para ver el cambio de inmediato
         PaintingBinding.instance.imageCache.clear();
         PaintingBinding.instance.imageCache.clearLiveImages();
 
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                Text('Imagen optimizada guardada como "$cleanName.jpg"')),
+            SnackBar(content: Text('Imagen guardada como "$_imagePath"')),
           );
         }
       }
     } catch (e) {
       debugPrint('⚠️ Error al comprimir imagen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar la imagen: $e')),
+        );
+      }
     }
   }
 
-  // 💾 Guardar producto
+  // 💾 Guardar producto (con isActive e imagen relativa)
   Future<void> _saveProduct() async {
     final name = _nameCtrl.text.trim();
     final desc = _descCtrl.text.trim();
@@ -145,9 +146,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
       description: desc,
       price: price,
       sectionId: sectionId,
-      imagePath: _imagePath,
+      imagePath: _imagePath, // 🔹 ya relativa
       sortOrder: widget.product?.sortOrder ?? 0,
-      isActive: isActive ? true : false, // ✅ Guardar el estado activo/inactivo
+      isActive: _isActive,
     ).toMap();
 
     int productId;
@@ -158,6 +159,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       productId = widget.product!.id!;
     }
 
+    // 🔹 Guardar configuración visual de imagen
     await _db.upsertImageSetting(ProductImageSetting(
       productId: productId,
       zoom: _zoom,
@@ -175,61 +177,54 @@ class _ProductFormPageState extends State<ProductFormPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-        Text(widget.product == null ? 'Nuevo producto' : 'Editar producto'),
+        title: Text(widget.product == null ? 'Nuevo producto' : 'Editar producto'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-                controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: 'Nombre')),
-            TextField(
-                controller: _descCtrl,
-                decoration:
-                const InputDecoration(labelText: 'Descripción')),
-            TextField(
-              controller: _priceCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Precio'),
-            ),
-            const SizedBox(height: 12),
+            TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
+            TextField(controller: _descCtrl, decoration: const InputDecoration(labelText: 'Descripción')),
+            TextField(controller: _priceCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Precio')),
 
-            // ✅ Nuevo switch para activar/inactivar el producto
+            const SizedBox(height: 8),
+
+            // 🔹 Switch para activar o desactivar producto
             SwitchListTile(
               title: const Text('Producto activo'),
-              value: isActive,
-              onChanged: (v) => setState(() => isActive = v),
+              value: _isActive,
+              onChanged: (v) => setState(() => _isActive = v),
               activeThumbColor: Colors.green,
             ),
 
             const SizedBox(height: 12),
+
             DropdownButtonFormField<Section>(
               initialValue: _selectedSection,
               items: widget.sections
-                  .map((s) =>
-                  DropdownMenuItem(value: s, child: Text(s.name)))
+                  .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
                   .toList(),
               onChanged: (val) => setState(() => _selectedSection = val),
               decoration: const InputDecoration(labelText: 'Sección'),
             ),
+
             const SizedBox(height: 20),
+
+            // 📸 Botón para seleccionar imagen
             Center(
               child: ElevatedButton.icon(
                 onPressed: _pickImage,
-                icon: Icon(_imagePath != null
-                    ? Icons.check_circle
-                    : Icons.image_outlined),
+                icon: Icon(
+                    _imagePath != null ? Icons.check_circle : Icons.image_outlined),
                 label: Text(_imagePath != null
                     ? 'Imagen seleccionada'
                     : 'Seleccionar imagen'),
               ),
             ),
 
-            // 🖼️ Vista previa
-            if (_imagePath != null && File(_imagePath!).existsSync()) ...[
+            // 🖼️ Vista previa con proporción del PDF
+            if (_imagePath != null) ...[
               const SizedBox(height: 20),
               Center(
                 child: ProductImagePreview(
@@ -284,6 +279,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
             ],
 
             const SizedBox(height: 24),
+
             Center(
               child: ElevatedButton.icon(
                 onPressed: _saveProduct,

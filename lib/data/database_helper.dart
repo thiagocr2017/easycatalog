@@ -1,8 +1,10 @@
 // 📄 lib/data/database_helper.dart
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/product_image_setting.dart';
+import 'package:path_provider/path_provider.dart';
 
 
 class DatabaseHelper {
@@ -30,6 +32,7 @@ class DatabaseHelper {
     await ensureProductSortOrderColumn(); // ✅ crea sortOrder si falta
     await ensureProductActiveColumn(); // ✅ nueva columna para productos activos/inactivos
     await ensureProductImageSettingsTable(); // ✅ nueva tabla
+
     return _database!;
   }
 
@@ -218,6 +221,27 @@ class DatabaseHelper {
       if (parts.length >= 3) ids.add(int.tryParse(parts[1]) ?? 0);
     }
     return ids.toList()..sort();
+  }
+
+  // ─────────────────────────────────────────────
+  // 🔹 OBTENER RUTA COMPLETA DE UNA IMAGEN LOCAL
+  // ─────────────────────────────────────────────
+  Future<File?> resolveImageFile(String? imagePath) async {
+    if (imagePath == null || imagePath.isEmpty) return null;
+
+    // Si ya es una ruta absoluta válida, la retornamos directamente
+    final file = File(imagePath);
+    if (file.existsSync()) return file;
+
+    // Si es solo el nombre del archivo → reconstruimos ruta relativa
+    final appDir = await getApplicationSupportDirectory();
+    final relativePath = '${appDir.path}/images/$imagePath';
+    final relativeFile = File(relativePath);
+
+    if (relativeFile.existsSync()) return relativeFile;
+
+    // Si no existe, devolvemos null
+    return null;
   }
 
   // ─────────────────────────────────────────────

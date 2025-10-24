@@ -18,9 +18,9 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
   final _reportService = DepletedReportService();
 
   // 🔹 Datos principales
-  List<Product> _allDepleted = []; // todos los productos agotados
-  List<Product> _filteredDepleted = []; // lista filtrada mostrada
-  String _searchQuery = ''; // texto de búsqueda activo
+  List<Product> _allDepleted = [];
+  List<Product> _filteredDepleted = [];
+  String _searchQuery = '';
   List<Map<String, dynamic>> _sections = [];
 
   @override
@@ -114,7 +114,7 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
   }
 
   // ─────────────────────────────────────────────
-  // Generar reporte PDF (nuevo módulo)
+  // Generar reporte PDF
   // ─────────────────────────────────────────────
   void _previewPdf() {
     if (_allDepleted.isEmpty) {
@@ -169,10 +169,11 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
 
     if (confirm != true) return;
 
-    // 🗑️ Eliminar imagen
-    if (p.imagePath != null && File(p.imagePath!).existsSync()) {
+    // 🗑️ Eliminar imagen local
+    final file = await _db.resolveImageFile(p.imagePath);
+    if (file != null && file.existsSync()) {
       try {
-        await File(p.imagePath!).delete();
+        await file.delete();
       } catch (e) {
         debugPrint('⚠️ No se pudo eliminar la imagen: $e');
       }
@@ -193,6 +194,13 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
         backgroundColor: Colors.red.shade400,
       ),
     );
+  }
+
+  // ─────────────────────────────────────────────
+  // Resolver imagen para la lista (rutas relativas)
+  // ─────────────────────────────────────────────
+  Future<File?> _resolveProductImage(Product p) async {
+    return await _db.resolveImageFile(p.imagePath);
   }
 
   // ─────────────────────────────────────────────
@@ -229,7 +237,8 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
                 child: Container(
                   width: double.infinity,
                   color: Colors.green.shade50,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   child: Text(
                     _searchQuery.isEmpty
                         ? 'Mostrando ${_allDepleted.length} productos agotados'
@@ -237,7 +246,6 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
                     style: const TextStyle(fontSize: 13, color: Colors.green),
                   ),
                 ),
-
               ),
             ),
 
@@ -253,51 +261,61 @@ class _DepletedProductsPageState extends State<DepletedProductsPage> {
                 final formatted = date != null
                     ? '${date.day}/${date.month}/${date.year}'
                     : '';
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  child: ListTile(
-                    leading: p.imagePath != null &&
-                        File(p.imagePath!).existsSync()
-                        ? Image.file(File(p.imagePath!),
-                        width: 50, height: 50, fit: BoxFit.cover)
-                        : const Icon(Icons.image_not_supported),
-                    title: Text(p.name),
-                    subtitle: Text('Agotado el $formatted'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.folder_copy_outlined,
-                              color: Colors.grey),
-                          tooltip: 'Ver historial',
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProductHistoryPage(
-                                  productId: p.id!,
-                                  productName: p.name,
-                                ),
-                              ),
-                            );
-                          },
+
+                return FutureBuilder<File?>(
+                  future: _resolveProductImage(p),
+                  builder: (context, snapshot) {
+                    final file = snapshot.data;
+
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      child: ListTile(
+                        leading: (file != null && file.existsSync())
+                            ? Image.file(file,
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover)
+                            : const Icon(Icons.image_not_supported),
+                        title: Text(p.name),
+                        subtitle: Text('Agotado el $formatted'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.folder_copy_outlined,
+                                  color: Colors.grey),
+                              tooltip: 'Ver historial',
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ProductHistoryPage(
+                                      productId: p.id!,
+                                      productName: p.name,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.remove_red_eye,
+                                  color: Colors.green),
+                              tooltip: 'Reactivar producto',
+                              onPressed: () => _reactivateProduct(p),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_forever,
+                                  color: Colors.redAccent),
+                              tooltip: 'Eliminar permanentemente',
+                              onPressed: () =>
+                                  _confirmAndDeleteProduct(p),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.remove_red_eye,
-                              color: Colors.green),
-                          tooltip: 'Reactivar producto',
-                          onPressed: () => _reactivateProduct(p),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_forever,
-                              color: Colors.redAccent),
-                          tooltip: 'Eliminar permanentemente',
-                          onPressed: () => _confirmAndDeleteProduct(p),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  },
                 );
               },
             ),

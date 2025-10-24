@@ -97,12 +97,13 @@ class PdfService {
     final allProducts =
     (await _db.getProducts()).map((m) => Product.fromMap(m)).toList();
 
+    // 🔹 Filtra productos activos y no agotados
+    final activeProducts =
+    allProducts.where((p) => p.isActive && !p.isDepleted).toList();
+
     for (final section in sections) {
-      final products = allProducts
-          .where((p) =>
-      p.sectionId == section.id &&
-          !p.isDepleted &&        // sigue excluyendo los agotados
-          p.isActive)             // 🔹 excluye los inactivos
+      final products = activeProducts
+          .where((p) => p.sectionId == section.id)
           .toList()
         ..sort((a, b) {
           final sa = a.sortOrder;
@@ -111,13 +112,12 @@ class PdfService {
           return a.name.toLowerCase().compareTo(b.name.toLowerCase());
         });
 
-      if (products.isEmpty) continue; // omitir secciones vacías
+      if (products.isEmpty) continue;
       doc.addPage(_buildSectionPage(section, style, montserrat));
 
       for (var i = 0; i < products.length; i += 2) {
         final slice = products.sublist(i, (i + 2).clamp(0, products.length));
 
-        // Configuraciones de imagen
         final imageSettings = <int, Map<String, double>>{};
         for (final prod in slice) {
           final conf = await _db.getImageSetting(prod.id ?? -1);
@@ -128,8 +128,7 @@ class PdfService {
           };
         }
 
-        doc.addPage(
-            _buildProductsPage(slice, style, montserrat, openSans, imageSettings));
+        doc.addPage(await _buildProductsPage(slice, style, montserrat, openSans, imageSettings));
       }
     }
 
@@ -167,10 +166,7 @@ class PdfService {
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
               if (s.logoPath != null && File(s.logoPath!).existsSync())
-                pw.Image(
-                  pw.MemoryImage(File(s.logoPath!).readAsBytesSync()),
-                  height: 160,
-                )
+                pw.Image(pw.MemoryImage(File(s.logoPath!).readAsBytesSync()), height: 160)
               else
                 pw.Text(
                   'HyJ Souvenir Bisutería',
@@ -218,28 +214,20 @@ class PdfService {
                       final logo = pm['logoPath'] as String?;
                       final name = (pm['name'] ?? '').toString();
                       final info = (pm['info'] ?? '').toString();
-                      final beneficiary =
-                      (pm['beneficiary'] ?? '').toString();
+                      final beneficiary = (pm['beneficiary'] ?? '').toString();
                       return pw.Padding(
-                        padding:
-                        const pw.EdgeInsets.symmetric(vertical: 4),
+                        padding: const pw.EdgeInsets.symmetric(vertical: 4),
                         child: pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.center,
                           children: [
                             if (logo != null && File(logo).existsSync())
-                              pw.Image(
-                                pw.MemoryImage(File(logo).readAsBytesSync()),
-                                height: 40,
-                              ),
+                              pw.Image(pw.MemoryImage(File(logo).readAsBytesSync()), height: 40),
                             pw.SizedBox(width: 8),
                             pw.Column(
-                              crossAxisAlignment:
-                              pw.CrossAxisAlignment.start,
+                              crossAxisAlignment: pw.CrossAxisAlignment.start,
                               children: [
-                                pw.Text(name,
-                                    style: pw.TextStyle(font: montserrat, fontSize: 12)),
-                                pw.Text(info,
-                                    style: pw.TextStyle(font: montserrat, fontSize: 10)),
+                                pw.Text(name, style: pw.TextStyle(font: montserrat, fontSize: 12)),
+                                pw.Text(info, style: pw.TextStyle(font: montserrat, fontSize: 10)),
                                 pw.Text(
                                   beneficiary,
                                   style: pw.TextStyle(
@@ -267,8 +255,7 @@ class PdfService {
   // ─────────────────────────────────────────────
   // Página de sección
   // ─────────────────────────────────────────────
-  pw.Page _buildSectionPage(
-      Section section, StyleSettings s, pw.Font font) =>
+  pw.Page _buildSectionPage(Section section, StyleSettings s, pw.Font font) =>
       pw.Page(
         pageFormat: PdfPageFormat.a4,
         margin: pw.EdgeInsets.zero,
@@ -289,38 +276,46 @@ class PdfService {
       );
 
   // ─────────────────────────────────────────────
-  // Página de productos (recibe zoom y offset)
+  // Página de productos (resuelve imágenes antes)
   // ─────────────────────────────────────────────
-  pw.Page _buildProductsPage(
+  Future<pw.Page> _buildProductsPage(
       List<Product> products,
       StyleSettings s,
       pw.Font titleFont,
       pw.Font textFont,
       Map<int, Map<String, double>> imageSettings,
-      ) =>
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: pw.EdgeInsets.zero,
-        build: (_) => pw.Container(
-          color: _colorFromInt(s.backgroundColor),
-          padding: const pw.EdgeInsets.all(24),
-          child: pw.Column(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-            children: products
-                .map((p) => _productCard(
-              p,
-              s,
-              titleFont,
-              textFont,
-              imageSettings[p.id ?? -1],
-            ))
-                .toList(),
-          ),
+      ) async {
+    final resolvedImages = <int, File?>{};
+    for (final p in products) {
+      resolvedImages[p.id ?? -1] = await _db.resolveImageFile(p.imagePath);
+    }
+
+    return pw.Page(
+      pageFormat: PdfPageFormat.a4,
+      margin: pw.EdgeInsets.zero,
+      build: (_) => pw.Container(
+        color: _colorFromInt(s.backgroundColor),
+        padding: const pw.EdgeInsets.all(24),
+        child: pw.Column(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+          children: [
+            for (final p in products)
+              _productCard(
+                p,
+                s,
+                titleFont,
+                textFont,
+                imageSettings[p.id ?? -1],
+                resolvedImages[p.id ?? -1],
+              ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 
   // ─────────────────────────────────────────────
-  // Tarjeta de producto (aplica zoom/offset)
+  // Tarjeta de producto (usa resolveImageFile)
   // ─────────────────────────────────────────────
   pw.Widget _productCard(
       Product p,
@@ -328,24 +323,20 @@ class PdfService {
       pw.Font titleFont,
       pw.Font textFont,
       Map<String, double>? imageSetting,
+      File? imageFile,
       ) {
-    final hasImage = p.imagePath != null && File(p.imagePath!).existsSync();
-    pw.ImageProvider? img;
-    if (hasImage) {
-      img = pw.MemoryImage(File(p.imagePath!).readAsBytesSync());
-    }
-
-    // 🔹 Referencia a los tamaños base definidos en ProductImagePreview
-    const double imgWidth = ProductImagePreview.baseWidth;
-    const double imgHeight = ProductImagePreview.baseHeight;
-
-    // 🔹 Configuración del zoom y desplazamientos guardados en BD
     final zoom = imageSetting?['zoom'] ?? 1.0;
     final offsetX = imageSetting?['offsetX'] ?? 0.0;
     final offsetY = imageSetting?['offsetY'] ?? 0.0;
 
+    final exists = imageFile != null && imageFile.existsSync();
+    pw.ImageProvider? img;
+    if (exists) {
+      img = pw.MemoryImage(imageFile.readAsBytesSync());
+    }
+
     return pw.Container(
-      height: imgHeight + 60, // espacio extra para texto debajo
+      height: imgHeight + 60,
       margin: const pw.EdgeInsets.symmetric(vertical: 12),
       decoration: pw.BoxDecoration(
         color: _colorFromInt(s.infoBoxColor),
@@ -355,37 +346,27 @@ class PdfService {
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          // 🖼️ Imagen del producto (idéntica a la vista de Flutter)
           pw.Container(
             width: imgWidth,
             height: imgHeight,
             decoration: pw.BoxDecoration(
               color: _colorFromInt(s.highlightColor),
               borderRadius: pw.BorderRadius.circular(16),
-              border: pw.Border.all(color: _colorFromInt(s.highlightColor), width: 5.0)
-
+              border: pw.Border.all(
+                color: _colorFromInt(s.highlightColor),
+                width: 5.0,
+              ),
             ),
-            child: hasImage
+            child: exists
                 ? pw.ClipRRect(
               horizontalRadius: 16,
               verticalRadius: 16,
-              child: pw.Stack(
-                alignment: pw.Alignment.center,
-                children: [
-                  pw.Transform.translate(
-                    offset: PdfPoint(offsetX * 35, -offsetY * 35),
-                    child: pw.Transform.scale(
-                      scale: zoom,
-                      child: pw.Image(
-                        img!,
-                        width: imgWidth,
-                        height: imgHeight,
-                        fit: pw.BoxFit.fill, // ✅ no recorta, mantiene proporción
-                        alignment: pw.Alignment.center,
-                      ),
-                    ),
-                  ),
-                ],
+              child: pw.Transform.translate(
+                offset: PdfPoint(offsetX * 35, -offsetY * 35),
+                child: pw.Transform.scale(
+                  scale: zoom,
+                  child: pw.Image(img!, fit: pw.BoxFit.cover),
+                ),
               ),
             )
                 : pw.Center(
@@ -400,31 +381,26 @@ class PdfService {
               ),
             ),
           ),
-
           pw.SizedBox(width: 20),
-
-          // 🧾 Información del producto
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                // 🏷️ Franja de color detrás del nombre del producto (alineada a la izquierda)
                 pw.Container(
                   margin: const pw.EdgeInsets.only(bottom: 14),
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 0, vertical: 0),
                   child: pw.Align(
-                    alignment: pw.Alignment.centerLeft, // 🔹 alinea la franja completa a la izquierda
+                    alignment: pw.Alignment.centerLeft,
                     child: pw.Container(
-                      width: double.infinity, // 🔹 Ocupa todo el ancho dentro del bloque, dejando padding lateral.
-                      //width: imgWidth * 0.9, // 🔹 ocupa el 90 % del ancho del área de texto
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                       decoration: pw.BoxDecoration(
                         color: _colorFromInt(s.highlightColor),
                         borderRadius: pw.BorderRadius.circular(12),
                       ),
                       child: pw.Text(
                         p.name,
-                        textAlign: pw.TextAlign.left, // 🔹 texto alineado a la izquierda dentro de la franja
+                        textAlign: pw.TextAlign.left,
                         style: pw.TextStyle(
                           font: titleFont,
                           fontWeight: pw.FontWeight.bold,
