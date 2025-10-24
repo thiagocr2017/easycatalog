@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/product_image_setting.dart';
 
+
 class DatabaseHelper {
   static const _databaseName = 'catalogo.db';
   static const _databaseVersion = 1;
@@ -27,7 +28,8 @@ class DatabaseHelper {
     if (_database != null) return _database!;
     _database = await _initDatabase();
     await ensureProductSortOrderColumn(); // ✅ crea sortOrder si falta
-    await ensureProductImageSettingsTable(); // nueva tabla
+    await ensureProductActiveColumn(); // ✅ nueva columna para productos activos/inactivos
+    await ensureProductImageSettingsTable(); // ✅ nueva tabla
     return _database!;
   }
 
@@ -121,6 +123,21 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE $tableProducts ADD COLUMN sortOrder INTEGER DEFAULT 0');
     }
   }
+
+  // ✅ Verifica si existe la columna "isActive" y la crea si falta
+  // ───────────────────────────────────────────────────────────
+  // ACTIVAR Y DESACTIVAR PRODUCTO ( NO ES COMO AGOTAR PRODUCTO.
+  // ───────────────────────────────────────────────────────────
+  Future<void> ensureProductActiveColumn() async {
+    final db = await database;
+    final res = await db.rawQuery('PRAGMA table_info($tableProducts)');
+    final hasActiveColumn = res.any((col) => col['name'] == 'isActive');
+    if (!hasActiveColumn) {
+      await db.execute('ALTER TABLE $tableProducts ADD COLUMN isActive INTEGER DEFAULT 1');
+      debugPrint('🟢 Columna "isActive" agregada a tabla $tableProducts');
+    }
+  }
+
 
   // ───────────────────────────────
   // Tabla de la imagen de producto

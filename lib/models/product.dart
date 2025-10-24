@@ -9,6 +9,7 @@ class Product {
   final String createdAt;
   String? depletedAt;
   int sortOrder; // ✅ nuevo campo editable para drag & drop
+  final bool isActive; // NUEVO CAMPO EDITABLE PARA ACTIVAR Y DESACTIVAR PRODUCTOS.
 
   Product({
     this.id,
@@ -21,6 +22,7 @@ class Product {
     String? createdAt,
     this.depletedAt,
     this.sortOrder = 0, // valor por defecto
+    this.isActive = true, // ✅ valor por defecto si no se especifica
   }) : createdAt = createdAt ?? DateTime.now().toIso8601String();
 
   Map<String, dynamic> toMap() => {
@@ -34,6 +36,7 @@ class Product {
     'createdAt': createdAt,
     'depletedAt': depletedAt,
     'sortOrder': sortOrder,
+    'isActive': isActive ? 1 : 0, // ✅ nuevo campo
   };
 
   factory Product.fromMap(Map<String, dynamic> map) {
@@ -48,6 +51,7 @@ class Product {
       createdAt: map['createdAt'] as String? ?? DateTime.now().toIso8601String(),
       depletedAt: map['depletedAt'] as String?,
       sortOrder: map['sortOrder'] as int? ?? 0,
+      isActive: (map['isActive'] ?? 1) == 1, // ✅ se lee desde la BD correctamente
     );
   }
 }

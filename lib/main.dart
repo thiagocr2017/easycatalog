@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:window_size/window_size.dart';
 
 // Importaciones de tus páginas
 import 'pages/admin/admin_home_page.dart';
@@ -10,7 +12,33 @@ import 'pages/catalog/seller_settings_page.dart';
 import 'pages/catalog/pdf_preview_page.dart';
 import 'pages/admin/depleted_products_page.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // ⚙️ Solo para entornos de escritorio (macOS, Windows, Linux)
+  if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+    // Obtiene la lista de pantallas disponibles
+    final screens = await getScreenList();
+    final screen = screens.first; // pantalla principal
+    final frame = screen.frame;
+
+    // 📐 Tamaño inicial deseado
+    const initialWidth = 600.0;
+    const initialHeight = 800.0;
+
+    // 📍 Calcula posición centrada
+    final left = (frame.width - initialWidth) / 2;
+    final top = (frame.height - initialHeight) / 2;
+
+    // 🔹 Configura ventana
+    setWindowTitle('EasyCatalog');
+    setWindowMinSize(const Size(400, 700));
+    setWindowMaxSize(Size.infinite);
+    setWindowFrame(
+      Rect.fromLTWH(left, top, initialWidth, initialHeight),
+    );
+  }
+
   runApp(const EasyCatalogApp());
 }
 

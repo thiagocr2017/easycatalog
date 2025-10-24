@@ -99,7 +99,10 @@ class PdfService {
 
     for (final section in sections) {
       final products = allProducts
-          .where((p) => p.sectionId == section.id && !p.isDepleted)
+          .where((p) =>
+      p.sectionId == section.id &&
+          !p.isDepleted &&        // sigue excluyendo los agotados
+          p.isActive)             // 🔹 excluye los inactivos
           .toList()
         ..sort((a, b) {
           final sa = a.sortOrder;
@@ -108,14 +111,13 @@ class PdfService {
           return a.name.toLowerCase().compareTo(b.name.toLowerCase());
         });
 
-      if (products.isEmpty) continue;
-
+      if (products.isEmpty) continue; // omitir secciones vacías
       doc.addPage(_buildSectionPage(section, style, montserrat));
 
       for (var i = 0; i < products.length; i += 2) {
         final slice = products.sublist(i, (i + 2).clamp(0, products.length));
 
-        // 🔹 Cargar configuraciones de zoom y encuadre antes de generar la página
+        // Configuraciones de imagen
         final imageSettings = <int, Map<String, double>>{};
         for (final prod in slice) {
           final conf = await _db.getImageSetting(prod.id ?? -1);
@@ -458,167 +460,4 @@ class PdfService {
       ),
     );
   }
-
-/*
-  // ─────────────────────────────────────────────
-  // Reporte de productos agotados
-  // ─────────────────────────────────────────────
-  Future<Uint8List> buildDepletedProductsReport(
-      List<Product> products) async {
-    final doc = pw.Document();
-    final montserrat =
-    pw.Font.ttf(await rootBundle.load('assets/fonts/Montserrat-Regular.ttf'));
-    final openSans =
-    pw.Font.ttf(await rootBundle.load('assets/fonts/OpenSans-Regular.ttf'));
-
-    final productData = <Map<String, dynamic>>[];
-
-    for (final p in products) {
-      final createdAt = DateTime.tryParse(p.createdAt);
-      final depletedAt = DateTime.tryParse(p.depletedAt ?? '');
-      final logs = await _db.getProductLogs(p.id!);
-
-      DateTime? lastReactivation;
-      for (final log in logs) {
-        if (log['action'] == 'reactivado') {
-          final d = DateTime.tryParse(log['timestamp']);
-          if (d != null) {
-            if (lastReactivation == null || d.isAfter(lastReactivation)) {
-              lastReactivation = d;
-            }
-          }
-        }
-      }
-
-      productData.add({
-        'product': p,
-        'createdAt': createdAt,
-        'depletedAt': depletedAt,
-        'lastReactivation': lastReactivation,
-      });
-    }
-
-    doc.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(24),
-        build: (_) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              'Reporte de Productos Agotados',
-              style: pw.TextStyle(
-                font: montserrat,
-                fontSize: 22,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-            pw.SizedBox(height: 20),
-            ...productData.map((entry) {
-              final Product p = entry['product'];
-              final createdAt = entry['createdAt'] as DateTime?;
-              final depletedAt = entry['depletedAt'] as DateTime?;
-              final lastReactivation = entry['lastReactivation'] as DateTime?;
-              final img = (p.imagePath != null &&
-                  File(p.imagePath!).existsSync())
-                  ? pw.MemoryImage(File(p.imagePath!).readAsBytesSync())
-                  : null;
-
-              final logText = StringBuffer();
-              if (createdAt != null) {
-                logText.writeln(
-                    'Creado: ${createdAt.day}/${createdAt.month}/${createdAt.year}');
-              }
-              if (lastReactivation != null) {
-                logText.writeln(
-                    'Reactivado: ${lastReactivation.day}/${lastReactivation.month}/${lastReactivation.year}');
-              }
-              if (depletedAt != null) {
-                logText.writeln(
-                    'Agotado: ${depletedAt.day}/${depletedAt.month}/${depletedAt.year}');
-              }
-
-              return pw.Container(
-                margin: const pw.EdgeInsets.only(bottom: 16),
-                padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.grey200,
-                  borderRadius: pw.BorderRadius.circular(8),
-                ),
-                child: pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Container(
-                      width: 80,
-                      height: 80,
-                      decoration: pw.BoxDecoration(
-                        color: PdfColors.grey300,
-                        borderRadius: pw.BorderRadius.circular(6),
-                      ),
-                      child: img != null
-                          ? pw.ClipRRect(
-                        horizontalRadius: 6,
-                        verticalRadius: 6,
-                        child: pw.Image(img, fit: pw.BoxFit.cover),
-                      )
-                          : pw.Center(
-                        child: pw.Text(
-                          'Sin imagen',
-                          style: pw.TextStyle(
-                            font: openSans,
-                            fontSize: 10,
-                            color: PdfColors.grey600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    pw.SizedBox(width: 12),
-                    pw.Expanded(
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            p.name,
-                            style: pw.TextStyle(
-                              font: montserrat,
-                              fontSize: 16,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                          pw.Text(
-                            p.description,
-                            style: pw.TextStyle(
-                              font: openSans,
-                              fontSize: 12,
-                              color: PdfColors.grey800,
-                            ),
-                          ),
-                          pw.Text(
-                            'Precio: \$${p.price.toStringAsFixed(2)}',
-                            style:
-                            pw.TextStyle(font: openSans, fontSize: 12),
-                          ),
-                          pw.SizedBox(height: 6),
-                          pw.Text(
-                            logText.toString(),
-                            style: pw.TextStyle(
-                              font: openSans,
-                              fontSize: 11,
-                              color: PdfColors.black,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-
-    return doc.save();
-  }*/
 }

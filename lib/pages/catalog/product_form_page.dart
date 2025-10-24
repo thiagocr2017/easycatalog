@@ -38,20 +38,29 @@ class _ProductFormPageState extends State<ProductFormPage> {
   double _offsetX = 0.0;
   double _offsetY = 0.0;
 
+  bool isActive = true; // ✅ Nuevo: control del estado activo/inactivo
+
   @override
   void initState() {
     super.initState();
+
     _nameCtrl = TextEditingController(text: widget.product?.name ?? '');
     _descCtrl = TextEditingController(text: widget.product?.description ?? '');
     _priceCtrl = TextEditingController(
       text: widget.product?.price.toString() ?? '',
     );
+
     _selectedSection = widget.sections.firstWhere(
           (s) => s.id == widget.product?.sectionId,
       orElse: () =>
       widget.sections.isNotEmpty ? widget.sections.first : Section(name: ''),
     );
+
     _imagePath = widget.product?.imagePath;
+
+    // ✅ Inicializa el estado activo/inactivo
+    isActive = widget.product?.isActive ?? true;
+
     _loadImageSettings();
   }
 
@@ -105,7 +114,9 @@ class _ProductFormPageState extends State<ProductFormPage> {
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Imagen optimizada guardada como "$cleanName.jpg"')),
+            SnackBar(
+                content:
+                Text('Imagen optimizada guardada como "$cleanName.jpg"')),
           );
         }
       }
@@ -136,6 +147,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       sectionId: sectionId,
       imagePath: _imagePath,
       sortOrder: widget.product?.sortOrder ?? 0,
+      isActive: isActive ? true : false, // ✅ Guardar el estado activo/inactivo
     ).toMap();
 
     int productId;
@@ -163,25 +175,42 @@ class _ProductFormPageState extends State<ProductFormPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.product == null ? 'Nuevo producto' : 'Editar producto'),
+        title:
+        Text(widget.product == null ? 'Nuevo producto' : 'Editar producto'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-            TextField(controller: _descCtrl, decoration: const InputDecoration(labelText: 'Descripción')),
+            TextField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(labelText: 'Nombre')),
+            TextField(
+                controller: _descCtrl,
+                decoration:
+                const InputDecoration(labelText: 'Descripción')),
             TextField(
               controller: _priceCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Precio'),
             ),
             const SizedBox(height: 12),
+
+            // ✅ Nuevo switch para activar/inactivar el producto
+            SwitchListTile(
+              title: const Text('Producto activo'),
+              value: isActive,
+              onChanged: (v) => setState(() => isActive = v),
+              activeThumbColor: Colors.green,
+            ),
+
+            const SizedBox(height: 12),
             DropdownButtonFormField<Section>(
               initialValue: _selectedSection,
               items: widget.sections
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+                  .map((s) =>
+                  DropdownMenuItem(value: s, child: Text(s.name)))
                   .toList(),
               onChanged: (val) => setState(() => _selectedSection = val),
               decoration: const InputDecoration(labelText: 'Sección'),
@@ -190,15 +219,16 @@ class _ProductFormPageState extends State<ProductFormPage> {
             Center(
               child: ElevatedButton.icon(
                 onPressed: _pickImage,
-                icon: Icon(
-                    _imagePath != null ? Icons.check_circle : Icons.image_outlined),
+                icon: Icon(_imagePath != null
+                    ? Icons.check_circle
+                    : Icons.image_outlined),
                 label: Text(_imagePath != null
                     ? 'Imagen seleccionada'
                     : 'Seleccionar imagen'),
               ),
             ),
 
-            // 🖼️ Vista previa de imagen con proporción PDF
+            // 🖼️ Vista previa
             if (_imagePath != null && File(_imagePath!).existsSync()) ...[
               const SizedBox(height: 20),
               Center(
@@ -207,7 +237,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
                   zoom: _zoom,
                   offsetX: _offsetX,
                   offsetY: _offsetY,
-                  scaleFactor: 0.8, // 📏 80% del tamaño base PDF (180×260)
+                  scaleFactor: 0.8,
                 ),
               ),
               const SizedBox(height: 16),

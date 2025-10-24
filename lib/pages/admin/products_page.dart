@@ -32,7 +32,8 @@ class _ProductsPageState extends State<ProductsPage> {
   // CARGA PRODUCTOS, SECCIONES Y CONFIGURACIONES
   // ─────────────────────────────────────────────
   Future<void> _loadData() async {
-    await _db.ensureProductSortOrderColumn();
+    //await _db.ensureProductActiveColumn();
+    //await _db.ensureProductSortOrderColumn();
     final sectionData = await _db.getSections();
     final productData = await _db.getProducts();
 
@@ -304,31 +305,56 @@ class _ProductsPageState extends State<ProductsPage> {
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
+                                          // 🔹 Botón activar/desactivar producto
                                           IconButton(
                                             icon: Icon(
-                                              p.isDepleted
-                                                  ? Icons.visibility_off
-                                                  : Icons.visibility,
-                                              color: p.isDepleted
-                                                  ? Colors.red
-                                                  : Colors.green,
+                                              p.isActive ? Icons.toggle_on : Icons.toggle_off,
+                                              color: p.isActive ? Colors.greenAccent : Colors.grey,
+                                              size: 30,
                                             ),
-                                            tooltip: p.isDepleted
-                                                ? 'Producto agotado'
-                                                : 'Activo',
-                                            onPressed: () =>
-                                                _toggleDepleted(p),
+                                            tooltip: p.isActive
+                                                ? 'Desactivar producto'
+                                                : 'Activar producto',
+                                            onPressed: () async {
+                                              final updated = p.toMap();
+                                              updated['isActive'] = p.isActive ? 0 : 1;
+                                              await _db.updateProduct(updated);
+                                              await _loadData();
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      p.isActive
+                                                          ? 'Producto "${p.name}" desactivado'
+                                                          : 'Producto "${p.name}" activado',
+                                                    ),
+                                                    duration: const Duration(seconds: 2),
+                                                  ),
+                                                );
+                                              }
+                                            },
                                           ),
+
+                                          // ✏️ Editar
                                           IconButton(
-                                            icon: const Icon(Icons.edit,
-                                                color: Colors.white),
+                                            icon: const Icon(Icons.edit, color: Colors.white),
                                             tooltip: 'Editar producto',
-                                            onPressed: () =>
-                                                _openProductForm(
-                                                    product: p),
+                                            onPressed: () => _openProductForm(product: p),
                                           ),
-                                          const Icon(Icons.drag_handle,
-                                              color: Colors.grey),
+
+                                          // 👁️ Agotar / reactivar
+                                          IconButton(
+                                            icon: Icon(
+                                              p.isDepleted ? Icons.visibility_off : Icons.visibility,
+                                              color: p.isDepleted ? Colors.red : Colors.green,
+                                            ),
+                                            tooltip: p.isDepleted ? 'Producto agotado' : 'Activo',
+                                            onPressed: () => _toggleDepleted(p),
+                                          ),
+
+                                          // ☰ Drag & drop (separado con margen extra)
+                                          const SizedBox(width: 15),
+                                          //const Icon(Icons.drag_handle, color: Colors.grey),
                                         ],
                                       ),
                                     ],
