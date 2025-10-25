@@ -13,7 +13,7 @@ dependencies:
 
   # 📦 Base de datos local
   sqflite: ^2.3.3
-  path_provider: ^2.1.2
+  path_provider: ^2.1.3
   path: ^1.9.0
 
   # 📄 PDF y vista previa
@@ -38,6 +38,8 @@ dependencies:
   shared_preferences: ^2.3.1
   flutter_launcher_icons: ^0.14.4
   flutter_image_compress: ^2.4.0
+  image: ^4.2.0
+
 
   # Importar exportar a Excel
   excel: ^2.1.0
