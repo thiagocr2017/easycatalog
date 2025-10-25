@@ -20,7 +20,8 @@ class ImportExportService {
       final sections = {for (var s in sectionsData) s['id']: s['name']};
 
       final excel = Excel.createExcel();
-      final sheet = excel['Productos'];
+      final sheetName = excel.getDefaultSheet();
+      final sheet = excel[sheetName ?? 'Sheet1']; // reutiliza la hoja por defecto
 
       // Cabeceras
       sheet.appendRow(const [

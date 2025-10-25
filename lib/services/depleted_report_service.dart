@@ -15,6 +15,7 @@ class DepletedReportService {
   Future<Uint8List> buildDepletedProductsReport(List<Product> products) async {
     final doc = pw.Document();
 
+
     // 🔹 Cargar fuentes
     final montserrat =
     pw.Font.ttf(await rootBundle.load('assets/fonts/Montserrat-Regular.ttf'));
@@ -107,6 +108,10 @@ class DepletedReportService {
           ),
         ),
       );
+    }
+
+    if (depleted.isEmpty) {
+      throw Exception('No hay productos activos agotados para generar el reporte.');
     }
 
     return doc.save();
