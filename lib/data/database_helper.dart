@@ -299,6 +299,23 @@ class DatabaseHelper {
     };
   }
 
+  // Reordenar Productos
+  // ─────────────────────────────────────────────
+  Future<void> batchUpdateProducts(List<Map<String, dynamic>> products) async {
+    final db = await database;
+    final batch = db.batch();
+    for (final product in products) {
+      batch.update(
+        'products',
+        product,
+        where: 'id = ?',
+        whereArgs: [product['id']],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+
   // ─────────────────────────────────────────────
   // SECCIONES
   // ─────────────────────────────────────────────
